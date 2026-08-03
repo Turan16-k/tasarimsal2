@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kombinasyon 23 — Hale</title>
+<meta name="theme-color" content="#05070c">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;background:#05070c;overflow:hidden}
+#scene{position:fixed;inset:0;display:block}
+.vignette{position:fixed;inset:0;pointer-events:none;
+  background:radial-gradient(ellipse at 50% 50%, transparent 55%, rgba(0,2,5,0.5) 100%)}
+</style>
+</head>
+<body>
+<canvas id="scene"></canvas>
+<div class="vignette" aria-hidden="true"></div>
+<script>
+(()=>{'use strict';
+const canvas=document.getElementById('scene');
+const ctx=canvas.getContext('2d');
+const TAU=Math.PI*2;
+const reduced=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const rand=Math.random;
+const perm=new Uint8Array(512);
+(function(){const p=new Uint8Array(256);for(let i=0;i<256;i++)p[i]=i;for(let i=255;i>0;i--){const j=(rand()*(i+1))|0;const t=p[i];p[i]=p[j];p[j]=t;}for(let i=0;i<512;i++)perm[i]=p[i&255];})();
+const fade=t=>t*t*t*(t*(t*6-15)+10);
+function val2(x,y){const xi=Math.floor(x),yi=Math.floor(y);const xf=x-xi,yf=y-yi;const u=fade(xf),v=fade(yf);const a=perm[(perm[xi&255]+yi)&255];const b=perm[(perm[(xi+1)&255]+yi)&255];const c=perm[(perm[xi&255]+(yi+1))&255];const d=perm[(perm[(xi+1)&255]+(yi+1))&255];const ab=a+(b-a)*u,cd=c+(d-c)*u;return ab+(cd-ab)*v;}
+function sn(x,y){return val2(x,y)*2-1;}
+let W=0,H=0,DPR=1,cx=0,cy=0,R=1,view=0.5;
+let mx=-1e9,my=-1e9;
+window.addEventListener('pointermove',e=>{mx=e.clientX;my=e.clientY;});
+window.addEventListener('pointerleave',()=>{mx=-1e9;my=-1e9;});
+
+const RINGS=[
+  {n:26,r:0.30,spd:0.35,hue:200,y:0.00},
+  {n:18,r:0.48,spd:-0.22,hue:212,y:-0.05},
+  {n:12,r:0.64,spd:0.15,hue:220,y:0.05},
+];
+
+function frame(now){
+  const dt=Math.min(now-last,50);last=now;
+  const k=dt/16.67;
+  const t=now/1000;
+  ctx.fillStyle='#05070c';ctx.fillRect(0,0,W,H);
+  // bakış açısı imlecin dikey konumuna eğilir
+  view=0.5+(my>-1e8?(my-cy)/H*0.6:0);
+  const ry=Math.cos(view);
+
+  ctx.save();ctx.globalCompositeOperation='lighter';
+  ctx.translate(cx,cy);
+  ctx.rotate(t*0.10+(mx>-1e8?(mx-cx)/W*0.6:0));
+  ctx.scale(1,ry);
+  ctx.lineCap='round';
+  for(const rn of RINGS){
+    const rr=R*rn.r,yo=R*rn.y;
+    // çok silik taç çizgisi
+    ctx.strokeStyle=`hsla(${rn.hue},50%,60%,0.05)`;
+    ctx.lineWidth=0.6;
+    ctx.beginPath();
+    for(let i=0;i<=48;i++){
+      const a=i/48*TAU;
+      const x=Math.cos(a)*rr,y=Math.sin(a)*rr+yo;
+      if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+    // taç üzerinde dönen ve parlayıp sönen kıvılcımlar
+    for(let i=0;i<rn.n;i++){
+      const a=t*rn.spd+i/rn.n*TAU;
+      const x=Math.cos(a)*rr,y=Math.sin(a)*rr+yo;
+      const tw=0.5+0.5*sn(i*1.7-t*0.9,rn.hue*0.1+i);
+      ctx.fillStyle=`hsla(${rn.hue+22*tw},75%,72%,${0.12+0.6*tw})`;
+      ctx.beginPath();ctx.arc(x,y,0.5+tw*1.4,0,TAU);ctx.fill();
+      // ara sıra kısa parlak çakı
+      if(tw>0.86){
+        ctx.strokeStyle=`hsla(${rn.hue+22},90%,85%,${(tw-0.86)*3})`;
+        ctx.lineWidth=1;
+        ctx.beginPath();
+        ctx.moveTo(x-3,y);ctx.lineTo(x+3,y);
+        ctx.moveTo(x,y-3);ctx.lineTo(x,y+3);
+        ctx.stroke();
+      }
+    }
+  }
+  ctx.restore();
+
+  requestAnimationFrame(frame);
+}
+let last=performance.now();
+
+function resize(){
+  DPR=Math.min(window.devicePixelRatio||1,1.5);
+  W=window.innerWidth;H=window.innerHeight;
+  canvas.width=Math.round(W*DPR);canvas.height=Math.round(H*DPR);
+  canvas.style.width=W+'px';canvas.style.height=H+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  cx=W/2;cy=H/2;R=Math.min(W,H)*0.42;
+  if(reduced)renderStatic();
+}
+function renderStatic(){
+  ctx.fillStyle='#05070c';ctx.fillRect(0,0,W,H);
+  ctx.save();ctx.globalCompositeOperation='lighter';
+  ctx.translate(cx,cy);
+  ctx.scale(1,0.86);
+  for(const rn of RINGS){
+    const rr=R*rn.r,yo=R*rn.y;
+    ctx.strokeStyle=`hsla(${rn.hue},50%,60%,0.3)`;
+    ctx.lineWidth=0.6;
+    ctx.beginPath();
+    for(let i=0;i<=48;i++){
+      const a=i/48*TAU;
+      const x=Math.cos(a)*rr,y=Math.sin(a)*rr+yo;
+      if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+window.addEventListener('resize',resize);
+resize();
+if(!reduced)requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

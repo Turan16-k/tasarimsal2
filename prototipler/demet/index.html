@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kombinasyon 19 — Demet</title>
+<meta name="theme-color" content="#05070d">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;background:#05070d;overflow:hidden}
+#scene{position:fixed;inset:0;display:block}
+.vignette{position:fixed;inset:0;pointer-events:none;
+  background:radial-gradient(ellipse at 50% 50%, transparent 55%, rgba(0,2,5,0.5) 100%)}
+</style>
+</head>
+<body>
+<canvas id="scene"></canvas>
+<div class="vignette" aria-hidden="true"></div>
+<script>
+(()=>{'use strict';
+const canvas=document.getElementById('scene');
+const ctx=canvas.getContext('2d');
+const TAU=Math.PI*2;
+const reduced=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const rand=Math.random;
+const perm=new Uint8Array(512);
+(function(){const p=new Uint8Array(256);for(let i=0;i<256;i++)p[i]=i;for(let i=255;i>0;i--){const j=(rand()*(i+1))|0;const t=p[i];p[i]=p[j];p[j]=t;}for(let i=0;i<512;i++)perm[i]=p[i&255];})();
+const fade=t=>t*t*t*(t*(t*6-15)+10);
+function val2(x,y){const xi=Math.floor(x),yi=Math.floor(y);const xf=x-xi,yf=y-yi;const u=fade(xf),v=fade(yf);const a=perm[(perm[xi&255]+yi)&255];const b=perm[(perm[(xi+1)&255]+yi)&255];const c=perm[(perm[xi&255]+(yi+1))&255];const d=perm[(perm[(xi+1)&255]+(yi+1))&255];const ab=a+(b-a)*u,cd=c+(d-c)*u;return ab+(cd-ab)*v;}
+function sn(x,y){return val2(x,y)*2-1;}
+let W=0,H=0,DPR=1,cx=0,cy=0,R=1;
+let mx=-1e9,my=-1e9;
+window.addEventListener('pointermove',e=>{mx=e.clientX;my=e.clientY;});
+window.addEventListener('pointerleave',()=>{mx=-1e9;my=-1e9;});
+
+const M=14,NS=22;
+function frame(now){
+  const dt=Math.min(now-last,50);last=now;
+  const k=dt/16.67;
+  const t=now/1000;
+  ctx.fillStyle='rgba(5,7,13,0.16)';ctx.fillRect(0,0,W,H);
+  // fıskiyenin ağzı imleci izler
+  if(mx>-1e8){cx+=(mx-cx)*0.10*k;cy+=(my-cy)*0.10*k;}
+
+  ctx.save();ctx.globalCompositeOperation='lighter';
+  ctx.lineCap='round';
+  for(let i=0;i<M;i++){
+    const fi=i/(M-1)-0.5;
+    const base=-Math.PI/2+fi*2.2;
+    const sway=sn(t*0.25,i*0.7)*0.35;
+    const hue=200+i*3;
+    ctx.strokeStyle=`hsla(${hue},55%,62%,0.20)`;
+    ctx.lineWidth=0.7;
+    ctx.beginPath();
+    let tip=null;
+    for(let s=0;s<=NS;s++){
+      const u=s/NS;
+      const a=base+sway*(1-u*0.5);
+      const rr=R*u*(0.9+0.1*Math.sin(t*0.5+i*1.3));
+      const x=cx+Math.cos(a)*rr,y=cy+Math.sin(a)*rr;
+      if(s===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
+      if(s===NS)tip=[x,y];
+    }
+    ctx.stroke();
+    if(tip){
+      ctx.fillStyle=`hsla(${hue+15},78%,76%,0.8)`;
+      ctx.beginPath();ctx.arc(tip[0],tip[1],1.4,0,TAU);ctx.fill();
+    }
+  }
+  // kök ışıması
+  const gr=ctx.createRadialGradient(cx,cy,0,cx,cy,R*0.08);
+  gr.addColorStop(0,'rgba(205,222,255,0.28)');
+  gr.addColorStop(1,'rgba(205,222,255,0)');
+  ctx.fillStyle=gr;ctx.fillRect(cx-R*0.08,cy-R*0.08,R*0.16,R*0.16);
+  ctx.restore();
+
+  requestAnimationFrame(frame);
+}
+let last=performance.now();
+
+function resize(){
+  DPR=Math.min(window.devicePixelRatio||1,1.5);
+  W=window.innerWidth;H=window.innerHeight;
+  canvas.width=Math.round(W*DPR);canvas.height=Math.round(H*DPR);
+  canvas.style.width=W+'px';canvas.style.height=H+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  cx=W/2;cy=H/2;R=Math.min(W,H)*0.5;
+  if(reduced)renderStatic();
+}
+function renderStatic(){
+  ctx.fillStyle='#05070d';ctx.fillRect(0,0,W,H);
+  ctx.save();ctx.globalCompositeOperation='lighter';
+  ctx.lineCap='round';
+  for(let i=0;i<M;i++){
+    const fi=i/(M-1)-0.5;
+    const base=-Math.PI/2+fi*2.2;
+    ctx.strokeStyle=`hsla(${200+i*3},55%,62%,0.4)`;
+    ctx.lineWidth=0.7;
+    ctx.beginPath();
+    for(let s=0;s<=NS;s++){
+      const u=s/NS;
+      const a=base;
+      const x=cx+Math.cos(a)*R*u,y=cy+Math.sin(a)*R*u;
+      if(s===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+window.addEventListener('resize',resize);
+resize();
+if(!reduced)requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

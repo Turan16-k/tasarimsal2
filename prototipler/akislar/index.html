@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Flow Field — Akış Çizgileri</title>
+<meta name="theme-color" content="#04060f">
+<style>
+  /* ─────────────────────────────────────────────────────────────
+     FLOW FIELD — çizgi atölyesi 03
+     Tamamen bağımsız (CDN yok). Canvas2D.
+     Dalgalanan akış çizgileri; soldan sağa süpüren bir ışık dalgası
+     her çizgiyi tek tek aydınlatıp ortaya çıkarır.
+     ───────────────────────────────────────────────────────────── */
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    height: 100%;
+    background: #03040d;
+    overflow: hidden;
+    font-family: "Palatino Linotype", "Book Antiqua", Georgia, serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  #scene { position: fixed; inset: 0; display: block; }
+
+  .vignette {
+    position: fixed; inset: 0; pointer-events: none;
+    background: radial-gradient(ellipse at 50% 50%, transparent 50%, rgba(2, 3, 10, 0.6) 100%);
+  }
+
+  .title {
+    position: fixed; top: 8%; left: 50%;
+    transform: translateX(-50%);
+    text-align: center; color: #eaf2ff; pointer-events: none; z-index: 5;
+    animation: fade-in 2.4s ease-out both;
+  }
+  .title .kicker {
+    font-size: 11px; letter-spacing: 0.5em; text-transform: uppercase;
+    color: rgba(150, 200, 255, 0.6); margin-bottom: 20px; text-indent: 0.5em;
+  }
+  .title h1 {
+    font-size: clamp(30px, 7vw, 82px); font-weight: 400; line-height: 0.98;
+    letter-spacing: 0.14em; color: #f0f6ff;
+    text-shadow: 0 0 34px rgba(90, 160, 255, 0.4), 0 0 100px rgba(120, 90, 255, 0.3);
+    animation: breathe 8s ease-in-out infinite;
+  }
+  .title h1 em { font-style: italic; color: #b7dcff; }
+  .title .sub {
+    margin-top: 16px; font-size: clamp(12px, 1.6vw, 16px);
+    font-style: italic; letter-spacing: 0.35em; color: rgba(205, 225, 255, 0.55);
+  }
+  .title .rule {
+    width: 64px; height: 1px; margin: 24px auto 0;
+    background: linear-gradient(90deg, transparent, rgba(130, 185, 255, 0.7), transparent);
+    animation: rule-grow 1.6s ease-out 0.6s both;
+  }
+  .hint {
+    position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+    font-size: 12px; letter-spacing: 0.22em; color: rgba(200, 220, 250, 0.45);
+    text-transform: uppercase; text-align: center; z-index: 5; pointer-events: none;
+    animation: fade-in 2.2s ease-out 0.8s both; white-space: nowrap;
+  }
+  .hint b { color: rgba(170, 230, 255, 0.9); font-weight: 400; }
+
+  @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes breathe {
+    0%, 100% { text-shadow: 0 0 24px rgba(90, 160, 255, 0.3), 0 0 80px rgba(120, 90, 255, 0.2); }
+    50%      { text-shadow: 0 0 50px rgba(120, 190, 255, 0.55), 0 0 140px rgba(150, 120, 255, 0.4); }
+  }
+  @keyframes rule-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+
+  @media (prefers-reduced-motion: reduce) {
+    .title h1 { animation: none; }
+    .title, .hint { animation: none; opacity: 1; }
+    .title .rule { animation: none; }
+  }
+</style>
+</head>
+<body>
+
+  <canvas id="scene"></canvas>
+  <div class="vignette" aria-hidden="true"></div>
+
+
+<script>
+(() => {
+  'use strict';
+  const canvas = document.getElementById('scene');
+  const ctx = canvas.getContext('2d');
+  const TAU = Math.PI * 2;
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const rand = Math.random;
+
+  let W = 0, H = 0, DPR = 1;
+
+  function makeGlow(size, stops) {
+    const c = document.createElement('canvas');
+    c.width = c.height = size;
+    const g = c.getContext('2d');
+    const grad = g.createRadialGradient(size/2, size/2, 0, size/2, size/2, size/2);
+    for (const [o, col] of stops) grad.addColorStop(o, col);
+    g.fillStyle = grad;
+    g.fillRect(0, 0, size, size);
+    return c;
+  }
+
+  const headGlow = makeGlow(48, [
+    [0, 'rgba(255,255,255,1)'],
+    [0.5, 'rgba(160,225,255,0.55)'],
+    [1, 'rgba(160,225,255,0)'],
+  ]);
+  const sunAura = makeGlow(320, [
+    [0, 'rgba(120,150,255,0.5)'],
+    [1, 'rgba(120,150,255,0)'],
+  ]);
+
+  let rows = [];
+  let bgGrad = null;
+  const xStep = 20;
+
+  function build() {
+    rows.length = 0;
+    bgGrad = ctx.createLinearGradient(0, 0, 0, H);
+    bgGrad.addColorStop(0, '#071026');
+    bgGrad.addColorStop(0.5, '#050b1a');
+    bgGrad.addColorStop(1, '#03050e');
+
+    const n = Math.min(36, Math.round(H / 18));
+    for (let j = 0; j < n; j++) {
+      const mix = j / (n - 1);
+      const hue = 200 + mix * 60; // camgöbeği → menekşe
+      rows.push({
+        baseY: H * (0.05 + mix * 0.9),
+        a1: 7 + rand() * 16,
+        a2: 4 + rand() * 9,
+        f1: 0.004 + rand() * 0.004,
+        f2: 0.012 + rand() * 0.008,
+        s1: 0.55 + rand() * 0.5,
+        s2: 0.35 + rand() * 0.4,
+        ph: rand() * TAU,
+        color: `hsla(${hue}, 90%, 62%, 1)`,
+      });
+    }
+  }
+
+  function rowY(r, x, t) {
+    return r.baseY
+      + r.a1 * Math.sin(x * r.f1 + t * r.s1 + r.ph)
+      + r.a2 * Math.sin(x * r.f2 - t * r.s2 * 0.6 + r.ph * 2);
+  }
+
+  function frame(now) {
+    const t = now / 1000;
+
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(0, 0, W, H);
+
+    // ışık dalgası konumu
+    const margin = 200;
+    const span = W + margin * 2;
+    const sweep = (t * W * 0.5) % span - margin;
+    const tail = W * 0.22;
+    const x0 = sweep - tail, x1 = sweep;
+
+    // arkadaki ışık kaynağı
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = 0.45;
+    ctx.drawImage(sunAura, cx_ - Math.min(W, H) * 0.6, cy_ - Math.min(W, H) * 0.6, Math.min(W, H) * 1.2, Math.min(W, H) * 1.2);
+    ctx.restore();
+
+    // süpüren ışık hüzmesi
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const beamGrad = ctx.createLinearGradient(x0, 0, x1, 0);
+    beamGrad.addColorStop(0, 'rgba(140,190,255,0)');
+    beamGrad.addColorStop(0.7, 'rgba(160,220,255,0.10)');
+    beamGrad.addColorStop(1, 'rgba(255,255,255,0.22)');
+    ctx.fillStyle = beamGrad;
+    ctx.fillRect(x0, 0, tail, H);
+    ctx.restore();
+
+    for (const r of rows) {
+      // örnekle
+      const pts = [];
+      for (let x = 0; x <= W; x += xStep) pts.push([x, rowY(r, x, t)]);
+      if (pts[pts.length - 1][0] < W) pts.push([W, rowY(r, W, t)]);
+
+      // taban
+      ctx.strokeStyle = r.color;
+      ctx.globalAlpha = 0.16;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(pts[0][0], pts[0][1]);
+      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+      ctx.stroke();
+
+      // aydınlatılmış pencere
+      if (sweep > -tail && sweep < W + tail) {
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.strokeStyle = 'rgba(235,250,255,1)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        let started = false;
+        for (const p of pts) {
+          if (p[0] >= x0 && p[0] <= x1) {
+            if (!started) { ctx.moveTo(p[0], p[1]); started = true; }
+            else ctx.lineTo(p[0], p[1]);
+          }
+        }
+        ctx.globalAlpha = 0.9;
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
+    // süpürücü ucun parıltısı
+    if (sweep > 0 && sweep < W) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = 0.9;
+      ctx.drawImage(headGlow, sweep - 14, 0, 28, H);
+      ctx.restore();
+    }
+
+    requestAnimationFrame(frame);
+  }
+
+  // merkez önbelleği
+  let cx_ = 0, cy_ = 0;
+
+  function resize() {
+    DPR = Math.min(window.devicePixelRatio || 1, 1.5);
+    W = window.innerWidth; H = window.innerHeight;
+    cx_ = W / 2; cy_ = H / 2;
+    canvas.width = Math.round(W * DPR);
+    canvas.height = Math.round(H * DPR);
+    canvas.style.width = W + 'px';
+    canvas.style.height = H + 'px';
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    build();
+    if (reduced) renderStatic();
+  }
+
+  function renderStatic() {
+    const t = 1.2;
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(0, 0, W, H);
+    for (const r of rows) {
+      ctx.strokeStyle = r.color;
+      ctx.globalAlpha = 0.5;
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      for (let x = 0; x <= W; x += xStep) {
+        const y = rowY(r, x, t);
+        if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+  }
+
+  window.addEventListener('resize', resize);
+  resize();
+  if (!reduced) requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

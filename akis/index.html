@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Anımsama 11 — Akış</title>
+<meta name="theme-color" content="#04131a">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;background:#04131a;overflow:hidden}
+#scene{position:fixed;inset:0;display:block}
+.vignette{position:fixed;inset:0;pointer-events:none;
+  background:radial-gradient(ellipse at 50% 45%, transparent 55%, rgba(0,4,8,0.5) 100%)}
+</style>
+</head>
+<body>
+<canvas id="scene"></canvas>
+<div class="vignette" aria-hidden="true"></div>
+<script>
+(()=>{'use strict';
+const canvas=document.getElementById('scene');
+const ctx=canvas.getContext('2d');
+const TAU=Math.PI*2;
+const reduced=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const rand=Math.random;
+let W=0,H=0,DPR=1;
+let mx=-1e9,my=-1e9;
+window.addEventListener('pointermove',e=>{mx=e.clientX;my=e.clientY;});
+window.addEventListener('pointerleave',()=>{mx=-1e9;my=-1e9;});
+
+let segs=[],bg=null;
+
+function angleDiff(a,b){let d=(b-a)%TAU;if(d>Math.PI)d-=TAU;if(d<-Math.PI)d+=TAU;return d;}
+
+function build(){
+  bg=ctx.createLinearGradient(0,0,0,H);
+  bg.addColorStop(0,'#031018');
+  bg.addColorStop(1,'#07202b');
+  segs=[];
+  const cols=Math.max(30,Math.min(64,Math.round(W/30)));
+  const rows=Math.max(18,Math.min(40,Math.round(H/26)));
+  for(let r=0;r<rows;r++){
+    for(let c=0;c<cols;c++){
+      segs.push({
+        x:(c+0.5)/cols*W,
+        y:(r+0.5)/rows*H,
+        len:11+rand()*9,
+        ph:rand()*TAU,
+      });
+    }
+  }
+}
+
+function frame(now){
+  const dt=now-last;last=now;
+  const t=now/1000;
+  ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
+  ctx.lineCap='round';
+  ctx.lineWidth=1.1;
+
+  for(const s of segs){
+    // akıntı açısı
+    let a=Math.sin(s.x*0.004+t*0.5)*1.1+Math.cos(s.y*0.005-t*0.35)*0.6+t*0.12;
+    if(mx>-1e8){
+      const dx=mx-s.x,dy=my-s.y;
+      const d=Math.hypot(dx,dy);
+      if(d<420){
+        const inf=Math.exp(-d/190)*0.55;
+        const target=Math.atan2(dy,dx);
+        a+=angleDiff(a,target)*inf;
+      }
+    }
+    const dx=Math.cos(a),dy=Math.sin(a);
+    const px=-dy,py=dx;
+    const x0=s.x-dx*s.len*0.5,y0=s.y-dy*s.len*0.5;
+    const x1=s.x+dx*s.len*0.5,y1=s.y+dy*s.len*0.5;
+    const wob=Math.sin(t*0.6+s.ph);
+    const cx2=s.x+px*wob*3.2,y2=s.y+py*wob*3.2;
+    const depth=0.5+0.5*Math.sin(a);
+    ctx.strokeStyle=`hsla(${192+s.y/H*34},55%,${56+16*depth}%,0.30)`;
+    ctx.beginPath();ctx.moveTo(x0,y0);
+    ctx.quadraticCurveTo(cx2,y2,x1,y1);
+    ctx.stroke();
+  }
+
+  requestAnimationFrame(frame);
+}
+let last=performance.now();
+
+function resize(){
+  DPR=Math.min(window.devicePixelRatio||1,1.5);
+  W=window.innerWidth;H=window.innerHeight;
+  canvas.width=Math.round(W*DPR);canvas.height=Math.round(H*DPR);
+  canvas.style.width=W+'px';canvas.style.height=H+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  build();
+  if(reduced)renderStatic();
+}
+function renderStatic(){
+  ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
+  ctx.lineWidth=1;
+  for(const s of segs){
+    const a=Math.sin(s.x*0.004+0.5)*1.1+Math.cos(s.y*0.005-0.35)*0.6;
+    ctx.strokeStyle='hsla(200,55%,60%,0.35)';
+    ctx.beginPath();ctx.moveTo(s.x-Math.cos(a)*s.len*0.5,s.y-Math.sin(a)*s.len*0.5);
+    ctx.lineTo(s.x+Math.cos(a)*s.len*0.5,s.y+Math.sin(a)*s.len*0.5);
+    ctx.stroke();
+  }
+}
+window.addEventListener('resize',resize);
+resize();
+if(!reduced)requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

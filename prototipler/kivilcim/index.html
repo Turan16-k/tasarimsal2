@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kombinasyon 16 — Kıvılcım</title>
+<meta name="theme-color" content="#06070f">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;background:#06070f;overflow:hidden}
+#scene{position:fixed;inset:0;display:block}
+.vignette{position:fixed;inset:0;pointer-events:none;
+  background:radial-gradient(ellipse at 50% 50%, transparent 55%, rgba(0,2,5,0.5) 100%)}
+</style>
+</head>
+<body>
+<canvas id="scene"></canvas>
+<div class="vignette" aria-hidden="true"></div>
+<script>
+(()=>{'use strict';
+const canvas=document.getElementById('scene');
+const ctx=canvas.getContext('2d');
+const TAU=Math.PI*2;
+const reduced=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const rand=Math.random;
+const perm=new Uint8Array(512);
+(function(){const p=new Uint8Array(256);for(let i=0;i<256;i++)p[i]=i;for(let i=255;i>0;i--){const j=(rand()*(i+1))|0;const t=p[i];p[i]=p[j];p[j]=t;}for(let i=0;i<512;i++)perm[i]=p[i&255];})();
+const fade=t=>t*t*t*(t*(t*6-15)+10);
+function val2(x,y){const xi=Math.floor(x),yi=Math.floor(y);const xf=x-xi,yf=y-yi;const u=fade(xf),v=fade(yf);const a=perm[(perm[xi&255]+yi)&255];const b=perm[(perm[(xi+1)&255]+yi)&255];const c=perm[(perm[xi&255]+(yi+1))&255];const d=perm[(perm[(xi+1)&255]+(yi+1))&255];const ab=a+(b-a)*u,cd=c+(d-c)*u;return ab+(cd-ab)*v;}
+function sn(x,y){return val2(x,y)*2-1;}
+let W=0,H=0,DPR=1,cx=0,cy=0,R=1;
+let mx=-1e9,my=-1e9;
+window.addEventListener('pointermove',e=>{mx=e.clientX;my=e.clientY;});
+window.addEventListener('pointerleave',()=>{mx=-1e9;my=-1e9;});
+
+const K=10,SEG=7;
+let paths=[];
+function build(){
+  cx=W/2;cy=H/2;R=Math.min(W,H)*0.42;
+  paths=[];
+  for(let i=0;i<K;i++){
+    const base=i/K*TAU;
+    const pts=[];
+    for(let s=0;s<=SEG;s++){
+      const u=s/SEG;
+      const r=R*u;
+      const a=base+sn(s*1.4,i*1.7)*0.55*(1-u);
+      pts.push([cx+Math.cos(a)*r,cy+Math.sin(a)*r]);
+    }
+    paths.push({pts,hue:212+i*4});
+  }
+}
+function pathPoint(pts,u){
+  const f=Math.max(0,Math.min(1,u));
+  const x=(SEG+1)*f;
+  const i=Math.min(SEG,Math.floor(x));
+  const f2=x-i;
+  const a=pts[i],b=pts[Math.min(SEG,i+1)];
+  return [a[0]+(b[0]-a[0])*f2,a[1]+(b[1]-a[1])*f2];
+}
+
+function frame(now){
+  const dt=Math.min(now-last,50);last=now;
+  const k=dt/16.67;
+  const t=now/1000;
+  ctx.fillStyle='#06070f';ctx.fillRect(0,0,W,H);
+
+  ctx.save();ctx.globalCompositeOperation='lighter';
+  ctx.lineCap='round';
+  // ağ (sabit, soluk)
+  for(const p of paths){
+    ctx.strokeStyle=`hsla(${p.hue},50%,58%,0.14)`;
+    ctx.lineWidth=0.6;
+    ctx.beginPath();ctx.moveTo(p.pts[0][0],p.pts[0][1]);
+    for(let s=1;s<=SEG;s++)ctx.lineTo(p.pts[s][0],p.pts[s][1]);
+    ctx.stroke();
+  }
+  // merkez düğüm ışıması
+  let rootFlash=0;
+  for(let i=0;i<K;i++){
+    const u=(t*0.30+i*0.11)%1;
+    if(u<0.04)rootFlash+=0.5;
+    const q=pathPoint(paths[i].pts,u);
+    const hi=pathPoint(paths[i].pts,Math.max(0,u-0.06));
+    ctx.strokeStyle=`hsla(${paths[i].hue+18},85%,80%,0.7)`;
+    ctx.lineWidth=1.4;
+    ctx.beginPath();ctx.moveTo(hi[0],hi[1]);ctx.lineTo(q[0],q[1]);ctx.stroke();
+    // uç flaşı
+    if(u>0.93){
+      const gr=ctx.createRadialGradient(q[0],q[1],0,q[0],q[1],9);
+      gr.addColorStop(0,`hsla(${paths[i].hue+18},85%,82%,0.8)`);
+      gr.addColorStop(1,'hsla(220,80%,80%,0)');
+      ctx.fillStyle=gr;ctx.fillRect(q[0]-9,q[1]-9,18,18);
+    }
+  }
+  if(rootFlash>0){
+    const gr=ctx.createRadialGradient(cx,cy,0,cx,cy,R*0.12);
+    gr.addColorStop(0,`rgba(210,225,255,${Math.min(1,rootFlash*0.35)})`);
+    gr.addColorStop(1,'rgba(210,225,255,0)');
+    ctx.fillStyle=gr;ctx.fillRect(cx-R*0.12,cy-R*0.12,R*0.24,R*0.24);
+  }
+  ctx.restore();
+
+  requestAnimationFrame(frame);
+}
+let last=performance.now();
+
+function resize(){
+  DPR=Math.min(window.devicePixelRatio||1,1.5);
+  W=window.innerWidth;H=window.innerHeight;
+  canvas.width=Math.round(W*DPR);canvas.height=Math.round(H*DPR);
+  canvas.style.width=W+'px';canvas.style.height=H+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  build();
+  if(reduced)renderStatic();
+}
+function renderStatic(){
+  ctx.fillStyle='#06070f';ctx.fillRect(0,0,W,H);
+  ctx.save();ctx.globalCompositeOperation='lighter';
+  for(const p of paths){
+    ctx.strokeStyle=`hsla(${p.hue},50%,58%,0.35)`;
+    ctx.lineWidth=0.6;
+    ctx.beginPath();ctx.moveTo(p.pts[0][0],p.pts[0][1]);
+    for(let s=1;s<=SEG;s++)ctx.lineTo(p.pts[s][0],p.pts[s][1]);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+window.addEventListener('resize',resize);
+resize();
+if(!reduced)requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

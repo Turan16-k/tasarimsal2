@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kombinasyon 11 — Kırağı</title>
+<meta name="theme-color" content="#05080f">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;background:#05080f;overflow:hidden}
+#scene{position:fixed;inset:0;display:block}
+.vignette{position:fixed;inset:0;pointer-events:none;
+  background:radial-gradient(ellipse at 50% 50%, transparent 55%, rgba(0,2,6,0.5) 100%)}
+</style>
+</head>
+<body>
+<canvas id="scene"></canvas>
+<div class="vignette" aria-hidden="true"></div>
+<script>
+(()=>{'use strict';
+const canvas=document.getElementById('scene');
+const ctx=canvas.getContext('2d');
+const TAU=Math.PI*2;
+const reduced=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const rand=Math.random;
+let W=0,H=0,DPR=1;
+let mx=-1e9,my=-1e9;
+window.addEventListener('pointermove',e=>{mx=e.clientX;my=e.clientY;});
+window.addEventListener('pointerleave',()=>{mx=-1e9;my=-1e9;});
+
+let segs=[],tips=[],phase='grow',phT=0,fadeT=0;
+
+function seed(){
+  segs=[];tips=[];
+  const sx=W*(0.25+rand()*0.5),sy=H*(0.25+rand()*0.45);
+  for(let i=0;i<6;i++){
+    tips.push({x:sx,y:sy,ang:i/6*TAU+(rand()-0.5)*0.4,spd:24,depth:0,len:0,maxLen:10+rand()*10,hue:200+rand()*40});
+  }
+  phase='grow';phT=0;
+}
+
+function frame(now){
+  const dt=Math.min(now-last,50);last=now;
+  const t=now/1000;
+  ctx.fillStyle='rgba(5,8,15,0.22)';ctx.fillRect(0,0,W,H);
+
+  if(phase==='grow'){
+    const newTips=[];
+    for(const tip of tips){
+      const step=tip.spd*dt;
+      tip.len+=step;
+      const nx=tip.x+Math.cos(tip.ang)*step;
+      const ny=tip.y+Math.sin(tip.ang)*step;
+      segs.push({x1:tip.x,y1:tip.y,x2:nx,y2:ny,hue:tip.hue,depth:tip.depth});
+      tip.x=nx;tip.y=ny;
+      if(tip.len>tip.maxLen&&tip.depth<18&&segs.length<420){
+        const nbr=1+((rand()*2)|0);
+        for(let b=0;b<nbr;b++){
+          newTips.push({x:nx,y:ny,ang:tip.ang+(rand()-0.5)*1.15,spd:tip.spd*0.78,depth:tip.depth+1,len:0,maxLen:8+rand()*12,hue:tip.hue+(rand()-0.5)*30});
+        }
+      } else if(segs.length<420){
+        newTips.push(tip);
+      }
+    }
+    tips=newTips;
+    if(tips.length===0||segs.length>=420){phase='hold';phT=1.1;}
+  } else if(phase==='hold'){
+    phT-=dt;
+    if(phT<=0){phase='fade';fadeT=2.4;}
+  } else if(phase==='fade'){
+    fadeT-=dt;
+    if(fadeT<=0)seed();
+  }
+
+  const fade=(phase==='fade'?Math.max(0,fadeT/2.4):1);
+  ctx.save();ctx.globalCompositeOperation='lighter';
+  ctx.lineCap='round';
+  for(const s of segs){
+    const dk=s.depth;
+    ctx.strokeStyle=`hsla(${s.hue},60%,${62+10*Math.sin(t+s.depth)}%,${0.05+0.20*(1-dk/18)*fade})`;
+    ctx.lineWidth=0.5+0.6*(1-dk/18);
+    ctx.beginPath();ctx.moveTo(s.x1,s.y1);ctx.lineTo(s.x2,s.y2);ctx.stroke();
+  }
+  ctx.restore();
+
+  requestAnimationFrame(frame);
+}
+let last=performance.now();
+
+function resize(){
+  DPR=Math.min(window.devicePixelRatio||1,1.5);
+  W=window.innerWidth;H=window.innerHeight;
+  canvas.width=Math.round(W*DPR);canvas.height=Math.round(H*DPR);
+  canvas.style.width=W+'px';canvas.style.height=H+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  seed();
+  if(reduced)renderStatic();
+}
+function renderStatic(){
+  ctx.fillStyle='#05080f';ctx.fillRect(0,0,W,H);
+  ctx.save();ctx.globalCompositeOperation='lighter';
+  ctx.lineCap='round';
+  for(const s of segs){
+    ctx.strokeStyle=`hsla(${s.hue},60%,62%,0.4)`;
+    ctx.lineWidth=0.6;
+    ctx.beginPath();ctx.moveTo(s.x1,s.y1);ctx.lineTo(s.x2,s.y2);ctx.stroke();
+  }
+  ctx.restore();
+}
+window.addEventListener('resize',resize);
+resize();
+if(!reduced)requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

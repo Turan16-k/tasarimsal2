@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kombinasyon 20 — Dokuma</title>
+<meta name="theme-color" content="#05070c">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;background:#05070c;overflow:hidden}
+#scene{position:fixed;inset:0;display:block}
+.vignette{position:fixed;inset:0;pointer-events:none;
+  background:radial-gradient(ellipse at 50% 50%, transparent 55%, rgba(0,2,5,0.5) 100%)}
+</style>
+</head>
+<body>
+<canvas id="scene"></canvas>
+<div class="vignette" aria-hidden="true"></div>
+<script>
+(()=>{'use strict';
+const canvas=document.getElementById('scene');
+const ctx=canvas.getContext('2d');
+const TAU=Math.PI*2;
+const reduced=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const rand=Math.random;
+const perm=new Uint8Array(512);
+(function(){const p=new Uint8Array(256);for(let i=0;i<256;i++)p[i]=i;for(let i=255;i>0;i--){const j=(rand()*(i+1))|0;const t=p[i];p[i]=p[j];p[j]=t;}for(let i=0;i<512;i++)perm[i]=p[i&255];})();
+const fade=t=>t*t*t*(t*(t*6-15)+10);
+function val2(x,y){const xi=Math.floor(x),yi=Math.floor(y);const xf=x-xi,yf=y-yi;const u=fade(xf),v=fade(yf);const a=perm[(perm[xi&255]+yi)&255];const b=perm[(perm[(xi+1)&255]+yi)&255];const c=perm[(perm[xi&255]+(yi+1))&255];const d=perm[(perm[(xi+1)&255]+(yi+1))&255];const ab=a+(b-a)*u,cd=c+(d-c)*u;return ab+(cd-ab)*v;}
+function sn(x,y){return val2(x,y)*2-1;}
+let W=0,H=0,DPR=1,cx=0,cy=0,w2=1,h2=1;
+let mx=-1e9,my=-1e9;
+window.addEventListener('pointermove',e=>{mx=e.clientX;my=e.clientY;});
+window.addEventListener('pointerleave',()=>{mx=-1e9;my=-1e9;});
+
+const GX=10,GY=8,STEP=24;
+function frame(now){
+  const dt=Math.min(now-last,50);last=now;
+  const k=dt/16.67;
+  const t=now/1000;
+  ctx.fillStyle='#05070c';ctx.fillRect(0,0,W,H);
+
+  ctx.save();
+  ctx.translate(cx,cy);
+  ctx.rotate(t*0.05);
+  ctx.globalCompositeOperation='lighter';
+  // yatay dalgalar
+  ctx.lineWidth=0.6;
+  for(let j=0;j<GY;j++){
+    const gy=-h2+j/(GY-1)*h2*2;
+    ctx.strokeStyle='rgba(150,180,240,0.07)';
+    ctx.beginPath();
+    for(let x=-w2;x<=w2;x+=STEP){
+      const y=gy+Math.sin(x*0.018+t*0.9)*h2*0.04;
+      if(x===-w2)ctx.moveTo(x,y);else ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+  }
+  // dikey dalgalar
+  for(let i=0;i<GX;i++){
+    const gx=-w2+i/(GX-1)*w2*2;
+    ctx.strokeStyle='rgba(165,195,255,0.07)';
+    ctx.beginPath();
+    for(let y=-h2;y<=h2;y+=STEP){
+      const x=gx+Math.sin(y*0.018-t*0.7)*w2*0.04;
+      if(y===-h2)ctx.moveTo(x,y);else ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+  }
+  // kesişim noktaları — döngüyle parlayıp söner
+  for(let i=0;i<GX;i++){
+    const gx=-w2+i/(GX-1)*w2*2;
+    for(let j=0;j<GY;j++){
+      const gy=-h2+j/(GY-1)*h2*2;
+      const x=gx+Math.sin(gy*0.018-t*0.7)*w2*0.04;
+      const y=gy+Math.sin(gx*0.018+t*0.9)*h2*0.04;
+      const pls=0.5+0.5*sn(gx*0.05-t*0.35,gy*0.05+t*0.30);
+      ctx.fillStyle=`hsla(${200+30*pls},70%,70%,${0.08+0.5*pls})`;
+      ctx.beginPath();ctx.arc(x,y,0.8+pls*1.1,0,TAU);ctx.fill();
+    }
+  }
+  ctx.restore();
+
+  requestAnimationFrame(frame);
+}
+let last=performance.now();
+
+function resize(){
+  DPR=Math.min(window.devicePixelRatio||1,1.5);
+  W=window.innerWidth;H=window.innerHeight;
+  canvas.width=Math.round(W*DPR);canvas.height=Math.round(H*DPR);
+  canvas.style.width=W+'px';canvas.style.height=H+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  cx=W/2;cy=H/2;w2=W*0.72;h2=H*0.72;
+  if(reduced)renderStatic();
+}
+function renderStatic(){
+  ctx.fillStyle='#05070c';ctx.fillRect(0,0,W,H);
+  ctx.save();ctx.globalCompositeOperation='lighter';
+  ctx.lineWidth=0.6;
+  for(let j=0;j<GY;j++){
+    const gy=-h2+j/(GY-1)*h2*2;
+    ctx.strokeStyle='rgba(150,180,240,0.3)';
+    ctx.beginPath();
+    for(let x=-w2;x<=w2;x+=STEP){
+      if(x===-w2)ctx.moveTo(x,gy);else ctx.lineTo(x,gy);
+    }
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+window.addEventListener('resize',resize);
+resize();
+if(!reduced)requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

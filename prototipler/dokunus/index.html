@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Anımsama 16 — Dokunuş</title>
+<meta name="theme-color" content="#04070c">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;background:#04070c;overflow:hidden}
+#scene{position:fixed;inset:0;display:block}
+.vignette{position:fixed;inset:0;pointer-events:none;
+  background:radial-gradient(ellipse at 50% 50%, transparent 55%, rgba(0,2,5,0.5) 100%)}
+</style>
+</head>
+<body>
+<canvas id="scene"></canvas>
+<div class="vignette" aria-hidden="true"></div>
+<script>
+(()=>{'use strict';
+const canvas=document.getElementById('scene');
+const ctx=canvas.getContext('2d');
+const TAU=Math.PI*2;
+const reduced=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const rand=Math.random;
+let W=0,H=0,DPR=1;
+let mx=-1e9,my=-1e9;
+window.addEventListener('pointermove',e=>{mx=e.clientX;my=e.clientY;});
+window.addEventListener('pointerleave',()=>{mx=-1e9;my=-1e9;});
+
+let motes=[],linkDist=0;
+
+function build(){
+  linkDist=Math.min(W,H)*0.11;
+  motes=[];
+  const n=Math.min(130,Math.round(W/12));
+  for(let i=0;i<n;i++){
+    motes.push({
+      x:rand()*W,
+      y:rand()*H,
+      vx:(rand()-0.5)*0.4,
+      vy:(rand()-0.5)*0.4,
+      r:1.1+rand()*1.5,
+      hue:192+rand()*34,
+      a:0.45+rand()*0.45,
+    });
+  }
+}
+
+function frame(now){
+  const dt=now-last;last=now;
+  const k=Math.min(dt,50)/16.67;
+  const t=now/1000;
+  ctx.fillStyle='#04070c';ctx.fillRect(0,0,W,H);
+
+  // bağlantı çizgileri (sürü/kanadın gerginliği)
+  ctx.lineWidth=0.6;
+  ctx.strokeStyle='rgba(170,210,240,0.5)';
+  for(let i=0;i<motes.length;i++){
+    const a=motes[i];
+    for(let j=i+1;j<motes.length;j++){
+      const b=motes[j];
+      const dx=a.x-b.x,dy=a.y-b.y;
+      const d2=dx*dx+dy*dy;
+      if(d2<linkDist*linkDist){
+        const d=Math.sqrt(d2)||1;
+        ctx.globalAlpha=(1-d/linkDist)*0.14;
+        ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();
+      }
+    }
+  }
+  ctx.globalAlpha=1;
+
+  // çekingen moteler
+  for(const m of motes){
+    m.vx+=(rand()-0.5)*0.12*k;
+    m.vy+=(rand()-0.5)*0.12*k;
+    if(mx>-1e8){
+      const dx=m.x-mx,dy=m.y-my;
+      const d2=dx*dx+dy*dy;
+      const R=Math.min(W,H)*0.16;
+      if(d2<R*R&&d2>0.01){
+        const d=Math.sqrt(d2);
+        const f=(1-d/R)*0.9;
+        m.vx+=dx/d*f*k*0.7;
+        m.vy+=dy/d*f*k*0.7;
+      }
+    }
+    m.vx*=0.95;m.vy*=0.95;
+    m.x+=m.vx*k;
+    m.y+=m.vy*k;
+    if(m.x<-20)m.x=W+20;if(m.x>W+20)m.x=-20;
+    if(m.y<-20)m.y=H+20;if(m.y>H+20)m.y=-20;
+  }
+
+  // çiz
+  ctx.save();ctx.globalCompositeOperation='lighter';
+  for(const m of motes){
+    const r=m.r*(0.8+0.4*Math.sin(t*2+m.x*0.05));
+    ctx.fillStyle=`hsla(${m.hue},70%,${62+10*Math.sin(t+m.y*0.03)}%,${m.a})`;
+    ctx.beginPath();ctx.arc(m.x,m.y,r,0,TAU);ctx.fill();
+  }
+  ctx.restore();
+
+  requestAnimationFrame(frame);
+}
+let last=performance.now();
+
+function resize(){
+  DPR=Math.min(window.devicePixelRatio||1,1.5);
+  W=window.innerWidth;H=window.innerHeight;
+  canvas.width=Math.round(W*DPR);canvas.height=Math.round(H*DPR);
+  canvas.style.width=W+'px';canvas.style.height=H+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  build();
+  if(reduced)renderStatic();
+}
+function renderStatic(){
+  ctx.fillStyle='#04070c';ctx.fillRect(0,0,W,H);
+  ctx.save();ctx.globalCompositeOperation='lighter';
+  for(const m of motes){
+    ctx.fillStyle=`hsla(${m.hue},70%,65%,0.6)`;
+    ctx.beginPath();ctx.arc(m.x,m.y,m.r,0,TAU);ctx.fill();
+  }
+  ctx.restore();
+}
+window.addEventListener('resize',resize);
+resize();
+if(!reduced)requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

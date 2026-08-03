@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Anımsama 02 — Gelgit</title>
+<meta name="theme-color" content="#060c12">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;background:#060c12;overflow:hidden}
+#scene{position:fixed;inset:0;display:block}
+.vignette{position:fixed;inset:0;pointer-events:none;
+  background:radial-gradient(ellipse at 50% 60%, transparent 50%, rgba(2,4,8,0.55) 100%)}
+</style>
+</head>
+<body>
+<canvas id="scene"></canvas>
+<div class="vignette" aria-hidden="true"></div>
+<script>
+(()=>{'use strict';
+const canvas=document.getElementById('scene');
+const ctx=canvas.getContext('2d');
+const TAU=Math.PI*2;
+const reduced=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const rand=Math.random;
+let W=0,H=0,DPR=1;
+let mx=-1e9,my=-1e9;
+window.addEventListener('pointermove',e=>{mx=e.clientX;my=e.clientY;});
+window.addEventListener('pointerleave',()=>{mx=-1e9;my=-1e9;});
+
+let lines=[],bg=null,ripples=[],nextRip=0;
+
+function build(){
+  bg=ctx.createLinearGradient(0,0,0,H);
+  bg.addColorStop(0,'#04060a');
+  bg.addColorStop(1,'#0b1c28');
+  lines=[];
+  const n=36;
+  for(let i=0;i<n;i++){
+    lines.push({
+      y:H*(0.54+0.42*i/n),
+      ph:rand()*TAU,
+      spd:0.5+rand()*0.8,
+      amp:1.5+rand()*2.2,
+    });
+  }
+  ripples.length=0;nextRip=0;
+}
+
+function frame(now){
+  const dt=now-last;last=now;
+  const k=Math.min(dt,50)/16.67;
+  const t=now/1000;
+  ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
+
+  // su seviyesi — yavaşça inip çıkan gelgit
+  const wl=H*(0.70-0.10*(0.5+0.5*Math.sin(t*0.13)));
+
+  // su hatırası halkaları
+  nextRip-=dt;
+  if(nextRip<=0){nextRip=2400+rand()*2600;ripples.push({x:rand()*W,y:wl+rand()*(H-wl)*0.9,age:0,life:6000+rand()*3000,r:0});}
+  ctx.save();ctx.strokeStyle='hsla(205,45%,70%,0.5)';
+  for(let i=ripples.length-1;i>=0;i--){
+    const rp=ripples[i];rp.age+=dt;
+    const p=rp.age/rp.life;
+    if(p>=1){ripples.splice(i,1);continue;}
+    const rr=6+p*(W*0.16);
+    ctx.globalAlpha=(1-p)*0.22;
+    ctx.beginPath();ctx.ellipse(rp.x,rp.y,rr,rr*0.16,0,0,TAU);ctx.stroke();
+  }
+  ctx.globalAlpha=1;ctx.restore();
+
+  // kum çizgileri
+  ctx.lineCap='round';
+  for(const L of lines){
+    const near=Math.exp(-Math.abs(L.y-wl)/(H*0.05));
+    const wet=L.y>wl;
+    const a=(wet?0.055:0.03)+0.5*near;
+    if(a<0.012)continue;
+    const y=L.y+Math.sin(t*L.spd+L.ph)*L.amp+Math.sin(t*L.spd*1.7+L.ph*2)*L.amp*0.5;
+    let ry=0;
+    if(my>-1e8){const d=Math.abs(my-L.y);if(d<H*0.22)ry-=Math.exp(-(d*d)/(H*0.02*H*0.02))*(7+5*near);}
+    ctx.strokeStyle=`hsla(${wet?203:212},42%,${wet?62:54}%,${a})`;
+    ctx.lineWidth=1;
+    ctx.beginPath();
+    for(let u=0;u<=1;u+=0.02){
+      const x=u*W;
+      const yy=y+ry+Math.sin(u*6+t*L.spd+L.ph)*L.amp*(0.35+2.4*near);
+      if(u===0)ctx.moveTo(x,yy);else ctx.lineTo(x,yy);
+    }
+    ctx.stroke();
+  }
+
+  // su kenarı — köpük çizgisi
+  ctx.save();ctx.globalCompositeOperation='lighter';
+  const foam=t*0.7;
+  for(let pass=0;pass<3;pass++){
+    ctx.strokeStyle=`hsla(210,55%,90%,${pass===2?0.4:0.12})`;
+    ctx.lineWidth=pass===0?12:pass===1?5:1.6;
+    ctx.beginPath();
+    for(let u=0;u<=1;u+=0.02){
+      const x=u*W;
+      const yy=wl+Math.sin(u*9+foam)*3+Math.sin(u*17+foam*1.6)*2+Math.sin(u*31+foam*2.2)*1;
+      if(u===0)ctx.moveTo(x,yy);else ctx.lineTo(x,yy);
+    }
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  requestAnimationFrame(frame);
+}
+let last=performance.now();
+
+function resize(){
+  DPR=Math.min(window.devicePixelRatio||1,1.5);
+  W=window.innerWidth;H=window.innerHeight;
+  canvas.width=Math.round(W*DPR);canvas.height=Math.round(H*DPR);
+  canvas.style.width=W+'px';canvas.style.height=H+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  build();
+  if(reduced)renderStatic();
+}
+
+function renderStatic(){
+  const t=3;
+  ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
+  const wl=H*0.65;
+  for(const L of lines){
+    const near=Math.exp(-Math.abs(L.y-wl)/(H*0.05));
+    if(near<0.1)continue;
+    ctx.strokeStyle=`hsla(203,42%,62%,${0.1+near*0.4})`;
+    ctx.lineWidth=1;
+    ctx.beginPath();
+    for(let u=0;u<=1;u+=0.02){
+      const x=u*W;const yy=L.y+Math.sin(u*6+L.ph)*L.amp*2;
+      if(u===0)ctx.moveTo(x,yy);else ctx.lineTo(x,yy);
+    }
+    ctx.stroke();
+  }
+}
+
+window.addEventListener('resize',resize);
+resize();
+if(!reduced)requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

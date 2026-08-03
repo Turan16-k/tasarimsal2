@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kombinasyon 12 — Yörünge</title>
+<meta name="theme-color" content="#05070d">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;background:#05070d;overflow:hidden}
+#scene{position:fixed;inset:0;display:block}
+.vignette{position:fixed;inset:0;pointer-events:none;
+  background:radial-gradient(ellipse at 50% 50%, transparent 55%, rgba(0,2,5,0.5) 100%)}
+</style>
+</head>
+<body>
+<canvas id="scene"></canvas>
+<div class="vignette" aria-hidden="true"></div>
+<script>
+(()=>{'use strict';
+const canvas=document.getElementById('scene');
+const ctx=canvas.getContext('2d');
+const TAU=Math.PI*2;
+const reduced=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const rand=Math.random;
+let W=0,H=0,DPR=1,cx=0,cy=0,view=0.5;
+let mx=-1e9,my=-1e9;
+window.addEventListener('pointermove',e=>{mx=e.clientX;my=e.clientY;});
+window.addEventListener('pointerleave',()=>{mx=-1e9;my=-1e9;});
+
+let rings=[],pulses=[];
+function build(){
+  cx=W/2;cy=H/2;view=0.5;
+  rings=[];pulses=[];
+  const R=Math.min(W,H)*0.40;
+  for(let i=0;i<4;i++){
+    const a=R*(0.55+0.42*i);
+    rings.push({
+      a,b:a*0.42,d:(i-1.5)*34,
+      rot:rand()*TAU,rotSpd:(rand()-0.5)*0.03,
+      period:14+rand()*16,
+      hue:[215,178,265,38][i],
+      dots:[{ph:rand()*TAU},{ph:rand()*TAU}],
+    });
+  }
+}
+function proj(ring,th){
+  const c=Math.cos(th),s=Math.sin(th);
+  const x=ring.a*c;
+  const y=ring.b*s;
+  const rr=ring.rot,cr=Math.cos(rr),sr=Math.sin(rr);
+  const rx=x*cr-y*sr,ry=x*sr+y*cr;
+  return [cx+rx,cy+ry*Math.cos(view)+ring.d*Math.sin(view)];
+}
+
+function frame(now){
+  const dt=Math.min(now-last,50);last=now;
+  const k=dt/16.67;
+  const t=now/1000;
+  ctx.fillStyle='rgba(5,7,13,0.30)';ctx.fillRect(0,0,W,H);
+  view=0.45+ (mx>-1e8?((mx-W/2)/W)*0.7:0);
+
+  ctx.save();ctx.globalCompositeOperation='lighter';
+  // merkez çekirdek
+  const cg=ctx.createRadialGradient(cx,cy,0,cx,cy,8);
+  cg.addColorStop(0,'rgba(220,230,255,0.5)');
+  cg.addColorStop(1,'rgba(220,230,255,0)');
+  ctx.fillStyle=cg;ctx.fillRect(cx-8,cy-8,16,16);
+
+  for(const rn of rings){
+    rn.rot+=rn.rotSpd*k*0.016;
+    // yörünge çizgisi
+    ctx.strokeStyle=`hsla(${rn.hue},55%,60%,0.18)`;
+    ctx.lineWidth=0.7;
+    ctx.beginPath();
+    for(let i=0;i<=64;i++){
+      const p=proj(rn,i/64*TAU);
+      if(i===0)ctx.moveTo(p[0],p[1]);else ctx.lineTo(p[0],p[1]);
+    }
+    ctx.stroke();
+    // gezegenler — her turda küçük bir halka bırakır
+    for(const d of rn.dots){
+      const prev=d.ph;
+      d.ph=(d.ph+dt/rn.period*TAU)%TAU;
+      if(d.ph<prev)pulses.push({x:proj(rn,d.ph)[0],y:proj(rn,d.ph)[1],born:t,hue:rn.hue});
+      const p=proj(rn,d.ph);
+      ctx.fillStyle=`hsla(${rn.hue},70%,78%,0.9)`;
+      ctx.beginPath();ctx.arc(p[0],p[1],1.8,0,TAU);ctx.fill();
+    }
+  }
+  // tamamlanan tur halkaları
+  for(let i=pulses.length-1;i>=0;i--){
+    const pu=pulses[i];
+    const age=t-pu.born;
+    if(age>1.6){pulses.splice(i,1);continue;}
+    const rr=age*26;
+    ctx.strokeStyle=`hsla(${pu.hue},65%,70%,${(1-age/1.6)*0.5})`;
+    ctx.lineWidth=0.7;
+    ctx.beginPath();ctx.arc(pu.x,pu.y,rr,0,TAU);ctx.stroke();
+  }
+  if(pulses.length>40)pulses.splice(0,pulses.length-40);
+  ctx.restore();
+
+  requestAnimationFrame(frame);
+}
+let last=performance.now();
+
+function resize(){
+  DPR=Math.min(window.devicePixelRatio||1,1.5);
+  W=window.innerWidth;H=window.innerHeight;
+  canvas.width=Math.round(W*DPR);canvas.height=Math.round(H*DPR);
+  canvas.style.width=W+'px';canvas.style.height=H+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  build();
+  if(reduced)renderStatic();
+}
+function renderStatic(){
+  ctx.fillStyle='#05070d';ctx.fillRect(0,0,W,H);
+  ctx.save();ctx.globalCompositeOperation='lighter';
+  for(const rn of rings){
+    ctx.strokeStyle=`hsla(${rn.hue},55%,60%,0.4)`;
+    ctx.lineWidth=0.7;
+    ctx.beginPath();
+    for(let i=0;i<=64;i++){
+      const p=proj(rn,i/64*TAU);
+      if(i===0)ctx.moveTo(p[0],p[1]);else ctx.lineTo(p[0],p[1]);
+    }
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+window.addEventListener('resize',resize);
+resize();
+if(!reduced)requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
