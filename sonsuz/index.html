@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Anımsama 14 — Sonsuz</title>
+<meta name="theme-color" content="#06060d">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;background:#06060d;overflow:hidden}
+#scene{position:fixed;inset:0;display:block}
+.vignette{position:fixed;inset:0;pointer-events:none;
+  background:radial-gradient(ellipse at 50% 50%, transparent 55%, rgba(1,2,5,0.5) 100%)}
+</style>
+</head>
+<body>
+<canvas id="scene"></canvas>
+<div class="vignette" aria-hidden="true"></div>
+<script>
+(()=>{'use strict';
+const canvas=document.getElementById('scene');
+const ctx=canvas.getContext('2d');
+const TAU=Math.PI*2;
+const reduced=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const rand=Math.random;
+let W=0,H=0,DPR=1;
+let mx=-1e9,my=-1e9;
+window.addEventListener('pointermove',e=>{mx=e.clientX;my=e.clientY;});
+window.addEventListener('pointerleave',()=>{mx=-1e9;my=-1e9;});
+
+function makeGlow(size,stops){
+  const c=document.createElement('canvas');c.width=c.height=size;
+  const g=c.getContext('2d');
+  const gr=g.createRadialGradient(size/2,size/2,0,size/2,size/2,size/2);
+  for(const[o,col]of stops)gr.addColorStop(o,col);
+  g.fillStyle=gr;g.fillRect(0,0,size,size);
+  return c;
+}
+const glow=makeGlow(48,[[0,'rgba(255,255,255,1)'],[0.5,'rgba(255,235,210,0.5)'],[1,'rgba(255,235,210,0)']]);
+
+let cx=0,cy=0,A=1,B=1;
+
+function build(){cx=W/2;cy=H/2;A=Math.min(W,H)*0.30;B=A*0.86;}
+
+function lemn(pts,n){
+  for(let i=0;i<=n;i++){
+    const u=(i/n)*TAU;
+    pts.push([cx+A*Math.cos(u),cy+B*Math.sin(u)*Math.cos(u)]);
+  }
+}
+
+function frame(now){
+  const dt=now-last;last=now;
+  const t=now/1000;
+  ctx.fillStyle='#06060d';ctx.fillRect(0,0,W,H);
+
+  const focus=mx>-1e8?Math.max(0,1-Math.hypot(mx-cx,my-cy)/(H*0.8)):0.4;
+  const tilt=mx>-1e8?Math.max(-0.25,Math.min(0.25,(mx-cx)*0.1/W)):0;
+  const hue=(t*9)%360;
+
+  const pts=[];lemn(pts,180);
+  const cum=[0];
+  for(let i=1;i<pts.length;i++)cum.push(cum[i-1]+Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]));
+  const total=cum[cum.length-1];
+
+  ctx.save();
+  ctx.translate(cx,cy);
+  ctx.rotate(tilt+Math.sin(t*0.2)*0.06);
+  ctx.translate(-cx,-cy);
+  ctx.lineCap='round';
+
+  // soluk temel
+  ctx.strokeStyle=`hsla(${hue},80%,62%,0.10)`;
+  ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(pts[0][0],pts[0][1]);
+  for(let i=1;i<pts.length;i++)ctx.lineTo(pts[i][0],pts[i][1]);
+  ctx.stroke();
+
+  // gezen ışık + kısa iz
+  const head=(t*0.09*(1+focus))%1;
+  const L1=head*total;
+  ctx.save();ctx.globalCompositeOperation='lighter';
+  const w=total*0.14;
+  for(let k=0;k<4;k++){
+    const s=Math.max(0,L1-(k+1)*w),e=Math.max(0,L1-k*w);
+    if(s>=e)break;
+    const al=(0.5-k*0.12);
+    ctx.strokeStyle=`hsla(${hue},85%,${72-k*6}%,${al})`;
+    ctx.lineWidth=2.4-k*0.4;
+    ctx.beginPath();
+    let started=false;
+    for(let i=0;i<pts.length;i++){
+      if(cum[i]>=s&&cum[i]<=e){
+        if(!started){ctx.moveTo(pts[i][0],pts[i][1]);started=true;}
+        else ctx.lineTo(pts[i][0],pts[i][1]);
+      }
+    }
+    ctx.stroke();
+  }
+  // uç ışığı
+  let hp=[pts[0][0],pts[0][1]];
+  for(let i=1;i<pts.length;i++){
+    if(cum[i]>=L1){const f=(L1-cum[i-1])/((cum[i]-cum[i-1])||1);hp=[pts[i-1][0]+(pts[i][0]-pts[i-1][0])*f,pts[i-1][1]+(pts[i][1]-pts[i-1][1])*f];break;}
+  }
+  ctx.globalAlpha=0.7+0.3*Math.sin(t*3);
+  ctx.drawImage(glow,hp[0]-9,hp[1]-9,18,18);
+  ctx.restore();
+
+  ctx.restore();
+
+  requestAnimationFrame(frame);
+}
+let last=performance.now();
+
+function resize(){
+  DPR=Math.min(window.devicePixelRatio||1,1.5);
+  W=window.innerWidth;H=window.innerHeight;
+  canvas.width=Math.round(W*DPR);canvas.height=Math.round(H*DPR);
+  canvas.style.width=W+'px';canvas.style.height=H+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  build();
+  if(reduced)renderStatic();
+}
+function renderStatic(){
+  ctx.fillStyle='#06060d';ctx.fillRect(0,0,W,H);
+  const pts=[];lemn(pts,180);
+  ctx.strokeStyle='hsla(250,80%,70%,0.6)';
+  ctx.lineWidth=1.4;
+  ctx.beginPath();ctx.moveTo(pts[0][0],pts[0][1]);
+  for(let i=1;i<pts.length;i++)ctx.lineTo(pts[i][0],pts[i][1]);
+  ctx.stroke();
+}
+window.addEventListener('resize',resize);
+resize();
+if(!reduced)requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

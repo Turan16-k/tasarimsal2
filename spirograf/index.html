@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spiro Graph — İz Bırakan Hipotrokoid</title>
+<meta name="theme-color" content="#05040c">
+<style>
+  /* ─────────────────────────────────────────────────────────────
+     SPIRO GRAPH — çizgi atölyesi 06
+     Tamamen bağımsız (CDN yok). Canvas2D.
+     İki zıt dönüşlü hipotrokoid, izini bırakarak kendini çizer.
+     Her döngü bittiğinde iz silinir ve yeni bir tasarım doğar.
+     ───────────────────────────────────────────────────────────── */
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    height: 100%;
+    background: #03020a;
+    overflow: hidden;
+    font-family: "Palatino Linotype", "Book Antiqua", Georgia, serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  #scene { position: fixed; inset: 0; display: block; }
+
+  .vignette {
+    position: fixed; inset: 0; pointer-events: none;
+    background: radial-gradient(ellipse at 50% 50%, transparent 45%, rgba(2, 1, 8, 0.6) 100%);
+  }
+
+  .title {
+    position: fixed; top: 8%; left: 50%;
+    transform: translateX(-50%);
+    text-align: center; color: #f0eeff; pointer-events: none; z-index: 5;
+    animation: fade-in 2.4s ease-out both;
+  }
+  .title .kicker {
+    font-size: 11px; letter-spacing: 0.5em; text-transform: uppercase;
+    color: rgba(200, 190, 255, 0.6); margin-bottom: 20px; text-indent: 0.5em;
+  }
+  .title h1 {
+    font-size: clamp(30px, 7vw, 82px); font-weight: 400; line-height: 0.98;
+    letter-spacing: 0.14em; color: #f5f2ff;
+    text-shadow: 0 0 34px rgba(120, 90, 255, 0.4), 0 0 100px rgba(255, 90, 160, 0.28);
+    animation: breathe 7s ease-in-out infinite;
+  }
+  .title h1 em { font-style: italic; color: #c4b1ff; }
+  .title .sub {
+    margin-top: 16px; font-size: clamp(12px, 1.6vw, 16px);
+    font-style: italic; letter-spacing: 0.35em; color: rgba(215, 210, 255, 0.55);
+  }
+  .title .rule {
+    width: 64px; height: 1px; margin: 24px auto 0;
+    background: linear-gradient(90deg, transparent, rgba(190, 160, 255, 0.7), transparent);
+    animation: rule-grow 1.6s ease-out 0.6s both;
+  }
+  .hint {
+    position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+    font-size: 12px; letter-spacing: 0.22em; color: rgba(215, 205, 250, 0.45);
+    text-transform: uppercase; text-align: center; z-index: 5; pointer-events: none;
+    animation: fade-in 2.2s ease-out 0.8s both; white-space: nowrap;
+  }
+  .hint b { color: rgba(150, 240, 255, 0.9); font-weight: 400; }
+
+  @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes breathe {
+    0%, 100% { text-shadow: 0 0 24px rgba(120, 90, 255, 0.3), 0 0 80px rgba(255, 90, 160, 0.18); }
+    50%      { text-shadow: 0 0 50px rgba(160, 130, 255, 0.55), 0 0 140px rgba(255, 130, 190, 0.38); }
+  }
+  @keyframes rule-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+
+  @media (prefers-reduced-motion: reduce) {
+    .title h1 { animation: none; }
+    .title, .hint { animation: none; opacity: 1; }
+    .title .rule { animation: none; }
+  }
+</style>
+</head>
+<body>
+
+  <canvas id="scene"></canvas>
+  <div class="vignette" aria-hidden="true"></div>
+
+
+<script>
+(() => {
+  'use strict';
+  const canvas = document.getElementById('scene');
+  const ctx = canvas.getContext('2d');
+  const TAU = Math.PI * 2;
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const rand = Math.random;
+
+  let W = 0, H = 0, DPR = 1, cx = 0, cy = 0, R0 = 1;
+
+  function makeGlow(size, stops) {
+    const c = document.createElement('canvas');
+    c.width = c.height = size;
+    const g = c.getContext('2d');
+    const grad = g.createRadialGradient(size/2, size/2, 0, size/2, size/2, size/2);
+    for (const [o, col] of stops) grad.addColorStop(o, col);
+    g.fillStyle = grad;
+    g.fillRect(0, 0, size, size);
+    return c;
+  }
+
+  const headCyan = makeGlow(48, [
+    [0, 'rgba(255,255,255,1)'],
+    [0.5, 'rgba(150,240,255,0.55)'],
+    [1, 'rgba(150,240,255,0)'],
+  ]);
+  const headGold = makeGlow(48, [
+    [0, 'rgba(255,255,255,1)'],
+    [0.5, 'rgba(255,215,130,0.55)'],
+    [1, 'rgba(255,215,130,0)'],
+  ]);
+  const aura = makeGlow(256, [
+    [0, 'rgba(120,90,255,0.4)'],
+    [1, 'rgba(120,90,255,0)'],
+  ]);
+
+  let sps = [];
+  let bgGrad = null;
+
+  function makeSp(R, r, d, hue, speed, sprite) {
+    return {
+      R, r, d,
+      a: R - r,
+      S: 1,
+      hue, speed, sprite,
+      th: 0,
+      pts: [],
+      cycles: 0,
+    };
+  }
+
+  function build() {
+    cx = W / 2; cy = H / 2;
+    R0 = Math.min(W, H) * 0.42;
+
+    bgGrad = ctx.createLinearGradient(0, 0, 0, H);
+    bgGrad.addColorStop(0, '#0b0720');
+    bgGrad.addColorStop(0.5, '#080515');
+    bgGrad.addColorStop(1, '#04020b');
+
+    sps = [
+      makeSp(200, 50, 160, 195, 0.0052, headCyan),
+      makeSp(200, 40, 170, 45, -0.0038, headGold),
+    ];
+    for (const sp of sps) {
+      sp.S = R0 / (sp.a + sp.d);
+    }
+  }
+
+  function spPoint(sp, th) {
+    const k = sp.a / sp.r;
+    const x = sp.a * Math.cos(th) + sp.d * Math.cos(k * th);
+    const y = sp.a * Math.sin(th) - sp.d * Math.sin(k * th);
+    return [cx + x * sp.S, cy + y * sp.S];
+  }
+
+  function frame(now) {
+    const dt = now - last; last = now;
+    const k = Math.min(dt, 50) / 16.67;
+    const t = now / 1000;
+
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(0, 0, W, H);
+
+    // merkez aura
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = 0.5;
+    ctx.drawImage(aura, cx - R0 * 1.1, cy - R0 * 1.1, R0 * 2.2, R0 * 2.2);
+    ctx.restore();
+
+    // kılavuz çember
+    ctx.strokeStyle = 'rgba(180,170,255,0.10)';
+    ctx.setLineDash([3, 9]);
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(cx, cy, R0, 0, TAU);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    for (const sp of sps) {
+      sp.th += sp.speed * k;
+      if (sp.th > TAU) {
+        sp.th -= TAU;
+        sp.cycles++;
+        sp.pts.length = 0;
+        // her döngüde yeni tasarım: d'yi ve renk tonunu hafifçe değiştir
+        sp.d = sp.d + (rand() - 0.5) * 30;
+        sp.S = R0 / (sp.a + sp.d);
+        sp.hue = (sp.hue + 12 + rand() * 14) % 360;
+      }
+      if (sp.th < 0) sp.th += TAU;
+
+      sp.pts.push(spPoint(sp, sp.th));
+      const maxPts = Math.ceil(TAU / Math.abs(sp.speed)) + 40;
+      if (sp.pts.length > maxPts) sp.pts.shift();
+
+      // taban iz
+      if (sp.pts.length > 2) {
+        ctx.strokeStyle = `hsla(${sp.hue}, 95%, 62%, 0.35)`;
+        ctx.lineWidth = 1.1;
+        ctx.lineJoin = 'round';
+        ctx.beginPath();
+        ctx.moveTo(sp.pts[0][0], sp.pts[0][1]);
+        for (let i = 1; i < sp.pts.length; i++) ctx.lineTo(sp.pts[i][0], sp.pts[i][1]);
+        ctx.stroke();
+      }
+
+      // taze iz (parlak)
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const fresh = Math.min(sp.pts.length, 90);
+      if (fresh > 3) {
+        ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+        ctx.lineWidth = 1.8;
+        ctx.beginPath();
+        const start = sp.pts.length - fresh;
+        ctx.moveTo(sp.pts[start][0], sp.pts[start][1]);
+        for (let i = start + 1; i < sp.pts.length; i++) ctx.lineTo(sp.pts[i][0], sp.pts[i][1]);
+        ctx.stroke();
+      }
+      const hp = sp.pts[sp.pts.length - 1];
+      ctx.drawImage(sp.sprite, hp[0] - 9, hp[1] - 9, 18, 18);
+      ctx.restore();
+    }
+
+    requestAnimationFrame(frame);
+  }
+
+  let last = performance.now();
+
+  function resize() {
+    DPR = Math.min(window.devicePixelRatio || 1, 1.5);
+    W = window.innerWidth; H = window.innerHeight;
+    canvas.width = Math.round(W * DPR);
+    canvas.height = Math.round(H * DPR);
+    canvas.style.width = W + 'px';
+    canvas.style.height = H + 'px';
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    build();
+    if (reduced) renderStatic();
+  }
+
+  function renderStatic() {
+    const th = TAU * 0.8;
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(0, 0, W, H);
+    for (const sp of sps) {
+      ctx.strokeStyle = `hsla(${sp.hue}, 95%, 62%, 0.7)`;
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      for (let i = 0; i <= 500; i++) {
+        const [x, y] = spPoint(sp, (i / 500) * TAU * 0.8);
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+  }
+
+  window.addEventListener('resize', resize);
+  resize();
+  if (!reduced) requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

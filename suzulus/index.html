@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Anımsama 01 — Süzülüş</title>
+<meta name="theme-color" content="#06080f">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;background:#06080f;overflow:hidden}
+#scene{position:fixed;inset:0;display:block}
+.vignette{position:fixed;inset:0;pointer-events:none;
+  background:radial-gradient(ellipse at 50% 40%, transparent 55%, rgba(2,3,6,0.55) 100%)}
+</style>
+</head>
+<body>
+<canvas id="scene"></canvas>
+<div class="vignette" aria-hidden="true"></div>
+<script>
+(()=>{'use strict';
+const canvas=document.getElementById('scene');
+const ctx=canvas.getContext('2d');
+const TAU=Math.PI*2;
+const reduced=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const rand=Math.random;
+let W=0,H=0,DPR=1;
+let mx=-1e9,my=-1e9;
+window.addEventListener('pointermove',e=>{mx=e.clientX;my=e.clientY;});
+window.addEventListener('pointerleave',()=>{mx=-1e9;my=-1e9;});
+
+function makeGlow(size,stops){
+  const c=document.createElement('canvas');c.width=c.height=size;
+  const g=c.getContext('2d');
+  const gr=g.createRadialGradient(size/2,size/2,0,size/2,size/2,size/2);
+  for(const[o,col]of stops)gr.addColorStop(o,col);
+  g.fillStyle=gr;g.fillRect(0,0,size,size);
+  return c;
+}
+const dot=makeGlow(56,[[0,'rgba(238,246,255,1)'],[0.45,'rgba(190,222,255,0.5)'],[1,'rgba(190,222,255,0)']]);
+
+let lines=[];
+
+// iki yumuşak tepe — bir kanat jesti
+function wing(d,w){
+  const g=x=>Math.exp(-(x/w)*(x/w));
+  return (g(d-0.42*w)+g(d+0.42*w))*0.72;
+}
+
+function build(){
+  lines=[];
+  const n=5;
+  for(let i=0;i<n;i++){
+    const nb=i%2===0?2:1;
+    const bumps=[];
+    for(let b=0;b<nb;b++){
+      bumps.push({
+        pos:rand(),
+        spd:(0.016+rand()*0.02)*(i%2?1:-1),
+        h:H*(0.05+rand()*0.055),
+        w:W*(0.05+rand()*0.04),
+      });
+    }
+    lines.push({
+      base:H*(0.20+0.16*i+rand()*0.02),
+      ph:rand()*TAU,
+      sway:7+rand()*9,
+      spd:0.25+rand()*0.3,
+      hue:212+i*15,
+      nPts:110,
+      bumps,
+    });
+  }
+}
+
+function linePts(L,t,k,focus){
+  const n=L.nPts,pts=[];
+  const flutter=0.12+0.88*focus;
+  for(const b of L.bumps){
+    b.pos+=b.spd*k*0.02;
+    if(b.pos<-0.2||b.pos>1.2){b.pos=rand();b.h=H*(0.05+rand()*0.055);b.w=W*(0.05+rand()*0.04);}
+  }
+  for(let i=0;i<=n;i++){
+    const u=i/n,x=u*W;
+    let y=L.base
+      + Math.sin(u*3.1+t*L.spd+L.ph)*L.sway*(0.5+0.5*Math.sin(u*2.3))
+      + Math.sin(u*7.4-t*L.spd*1.4+L.ph)*L.sway*0.35*flutter;
+    for(const b of L.bumps){
+      const d=(u-b.pos)*W/b.w;
+      if(Math.abs(d)<1.5)y-=b.h*flutter*wing(d,0.62);
+    }
+    pts.push([x,y]);
+  }
+  return pts;
+}
+
+function drawLine(L,pts,focus){
+  const grad=ctx.createLinearGradient(0,L.base,W,L.base);
+  const hue=L.hue;
+  grad.addColorStop(0,`hsla(${hue},45%,52%,0)`);
+  grad.addColorStop(0.16,`hsla(${hue},50%,58%,0.30)`);
+  grad.addColorStop(0.5,`hsla(${hue+10},62%,70%,0.55)`);
+  grad.addColorStop(0.84,`hsla(${hue+20},66%,80%,0.30)`);
+  grad.addColorStop(1,`hsla(${hue+25},60%,86%,0)`);
+  ctx.strokeStyle=grad;ctx.lineWidth=1.1;ctx.lineCap='round';
+  ctx.beginPath();ctx.moveTo(pts[0][0],pts[0][1]);
+  for(let i=1;i<pts.length;i++)ctx.lineTo(pts[i][0],pts[i][1]);
+  ctx.stroke();
+  // kanat uçlarındaki ışık
+  ctx.save();ctx.globalCompositeOperation='lighter';
+  for(const b of L.bumps){
+    const bu=Math.max(0,Math.min(1,b.pos));
+    const i=Math.round(bu*(pts.length-1));
+    const p=pts[i];
+    ctx.globalAlpha=0.18+0.5*focus;
+    const s=9+8*focus;
+    ctx.drawImage(dot,p[0]-s/2,p[1]-s/2,s,s);
+  }
+  ctx.restore();
+}
+
+function frame(now){
+  const dt=now-last;last=now;
+  const k=Math.min(dt,50)/16.67;
+  const t=now/1000;
+  ctx.fillStyle='#06080f';
+  ctx.fillRect(0,0,W,H);
+  for(const L of lines){
+    const dist=Math.abs(my-L.base)/(H*0.5);
+    const focus=Math.max(0,1-dist*1.1);
+    drawLine(L,linePts(L,t,k,focus),focus);
+  }
+  requestAnimationFrame(frame);
+}
+let last=performance.now();
+
+function resize(){
+  DPR=Math.min(window.devicePixelRatio||1,1.5);
+  W=window.innerWidth;H=window.innerHeight;
+  canvas.width=Math.round(W*DPR);canvas.height=Math.round(H*DPR);
+  canvas.style.width=W+'px';canvas.style.height=H+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  build();
+  if(reduced){const t=2;ctx.fillStyle='#06080f';ctx.fillRect(0,0,W,H);for(const L of lines)drawLine(L,linePts(L,t,1,0),0);}
+}
+window.addEventListener('resize',resize);
+resize();
+if(!reduced)requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

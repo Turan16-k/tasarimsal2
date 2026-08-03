@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sanat Bahçesi — Prototip Koleksiyonu</title>
+<meta name="theme-color" content="#05070d">
+<style>
+  /* ─────────────────────────────────────────────────────────────
+     SANAT BAHÇESİ — prototip sergi ana sayfası
+     Tamamen bağımsız (CDN yok). Her kart, altındaki prototipe bağlar.
+     ───────────────────────────────────────────────────────────── */
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    min-height: 100vh;
+    background:
+      radial-gradient(ellipse at 50% -10%, #0c1530 0%, transparent 55%),
+      #05070d;
+    color: #e8f0ff;
+    font-family: "Palatino Linotype", "Book Antiqua", Georgia, serif;
+    -webkit-font-smoothing: antialiased;
+    padding: 56px 22px 72px;
+  }
+
+  header {
+    text-align: center;
+    margin-bottom: 52px;
+  }
+  .kicker {
+    font-size: 11px; letter-spacing: 0.55em; text-transform: uppercase;
+    color: rgba(170, 205, 255, 0.55); margin-bottom: 22px; text-indent: 0.55em;
+  }
+  h1 {
+    font-size: clamp(36px, 7vw, 76px); font-weight: 400; line-height: 0.98;
+    letter-spacing: 0.12em;
+    text-shadow: 0 0 40px rgba(120, 190, 255, 0.35);
+  }
+  h1 em { font-style: italic; color: #9fd9ff; }
+  .sub {
+    margin-top: 18px; font-size: clamp(13px, 1.6vw, 16px);
+    font-style: italic; letter-spacing: 0.3em; color: rgba(190, 215, 245, 0.6);
+  }
+  .rule {
+    width: 70px; height: 1px; margin: 26px auto 0;
+    background: linear-gradient(90deg, transparent, rgba(160, 210, 255, 0.7), transparent);
+  }
+
+  .grid {
+    max-width: 1080px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 22px;
+  }
+
+  .family {
+    max-width: 1080px;
+    margin: 0 auto 8px;
+    font-size: 12px; font-weight: 400; letter-spacing: 0.42em;
+    text-transform: uppercase; color: rgba(175, 210, 255, 0.75);
+  }
+  .family-sub {
+    max-width: 1080px;
+    margin: 0 auto 28px;
+    font-size: 13px; font-style: italic; letter-spacing: 0.06em;
+    color: rgba(195, 218, 248, 0.5);
+  }
+  .family ~ .grid { margin-top: 0; }
+  .family + .family-sub + .grid { margin-bottom: 40px; }
+
+  .card {
+    display: block;
+    text-decoration: none;
+    color: inherit;
+    background: rgba(12, 20, 38, 0.55);
+    border: 1px solid rgba(140, 180, 255, 0.14);
+    border-radius: 14px;
+    overflow: hidden;
+    transition: transform 0.35s ease, border-color 0.35s ease, box-shadow 0.35s ease;
+  }
+  .card:hover {
+    transform: translateY(-5px);
+    border-color: rgba(180, 215, 255, 0.4);
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(160, 210, 255, 0.12);
+  }
+
+  /* canlı önizleme alanı — saf CSS */
+  .scene {
+    position: relative;
+    height: 150px;
+    overflow: hidden;
+    background:
+      linear-gradient(180deg, rgba(4, 8, 16, 0.25), rgba(2, 4, 10, 0.9));
+  }
+  .scene::before, .scene::after {
+    content: '';
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(34px);
+    will-change: transform, opacity;
+  }
+  .scene::before {
+    width: 200px; height: 200px;
+    background: radial-gradient(circle, var(--a, #3a86ff), transparent 70%);
+    animation: drift 9s ease-in-out infinite;
+  }
+  .scene::after {
+    width: 140px; height: 140px;
+    background: radial-gradient(circle, var(--b, #ff5ecb), transparent 70%);
+    animation: drift2 11s ease-in-out infinite;
+  }
+  @keyframes drift {
+    0%, 100% { transform: translate(12%, 18%) scale(1); opacity: 0.75; }
+    50%      { transform: translate(58%, 55%) scale(1.45); opacity: 1; }
+  }
+  @keyframes drift2 {
+    0%, 100% { transform: translate(55%, 8%) scale(1.35); opacity: 0.85; }
+    50%      { transform: translate(18%, 68%) scale(0.9); opacity: 0.5; }
+  }
+
+  .meta { padding: 20px 22px 22px; }
+  .no {
+    font-size: 11px; letter-spacing: 0.35em; color: rgba(150, 195, 255, 0.6);
+  }
+  .meta h2 {
+    font-size: 22px; font-weight: 400; letter-spacing: 0.08em;
+    margin: 8px 0 6px; color: #f2f8ff;
+  }
+  .meta h2 em { font-style: italic; color: #a7d4ff; }
+  .meta p {
+    font-size: 13px; font-style: italic; letter-spacing: 0.04em;
+    color: rgba(200, 220, 245, 0.65);
+  }
+  .open {
+    display: inline-block; margin-top: 14px;
+    font-size: 11px; letter-spacing: 0.3em; text-transform: uppercase;
+    color: rgba(150, 205, 255, 0.85);
+    transition: letter-spacing 0.3s ease;
+  }
+  .card:hover .open { letter-spacing: 0.42em; }
+
+  .tema {
+    max-width: 1080px; margin: 46px auto 0;
+    text-align: center; font-size: 12px; letter-spacing: 0.2em;
+    color: rgba(150, 175, 210, 0.45); text-transform: uppercase;
+  }
+
+  @media (max-width: 640px) {
+    .grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+  <header>
+    <p class="kicker">Dijital Prototipler</p>
+    <h1>SANAT <em>BAHÇESİ</em></h1>
+    <p class="sub">otuz altı tek-dosyalı animasyonlu dünya — çift tıkla, açılsın</p>
+    <div class="rule" aria-hidden="true"></div>
+  </header>
+
+  <main>
+    <h2 class="family">Işık Bahçesi</h2>
+    <p class="family-sub">ışıklı dünyalar — derin okyanus, yıldızlar, neon</p>
+    <div class="grid">
+
+    <a class="card" target="_blank" href="plankton-bahcesi/index.html">
+      <div class="scene" style="--a:#2fd8b0; --b:#0e6f66;"></div>
+      <div class="meta">
+        <span class="no">01</span>
+        <h2>ABYSS <em>GARDEN</em></h2>
+        <p>biyolüminesan plankton bahçesi</p>
+        <span class="open">aç →</span>
+      </div>
+    </a>
+
+    <a class="card" target="_blank" href="neon-yagmur/index.html">
+      <div class="scene" style="--a:#ff2f9e; --b:#00e5ff;"></div>
+      <div class="meta">
+        <span class="no">02</span>
+        <h2>NEON <em>DOWNPOUR</em></h2>
+        <p>synthwave kent yağmuru</p>
+        <span class="open">aç →</span>
+      </div>
+    </a>
+
+    </div>
+
+    <h2 class="family">Çizgi Atölyesi</h2>
+    <p class="family-sub">saf çizgi — ışık çizer, parlatır, yeniden kurar</p>
+    <div class="grid">
+
+      <a class="card" target="_blank" href="mandala/index.html">
+        <div class="scene" style="--a:#2fd8c8; --b:#ffd77a;"></div>
+        <div class="meta">
+          <span class="no">03</span>
+          <h2>SACRED <em>MANDALA</em></h2>
+          <p>ışığın çizdiği kutsal geometri</p>
+          <span class="open">aç →</span>
+        </div>
+      </a>
+
+      <a class="card" target="_blank" href="polyhedron/index.html">
+        <div class="scene" style="--a:#aa6aff; --b:#5ad8ff;"></div>
+        <div class="meta">
+          <span class="no">04</span>
+          <h2>WIREFRAME <em>SOLID</em></h2>
+          <p>dönen telkari ikosahedron</p>
+          <span class="open">aç →</span>
+        </div>
+      </a>
+
+      <a class="card" target="_blank" href="akislar/index.html">
+        <div class="scene" style="--a:#5a96ff; --b:#a06aff;"></div>
+        <div class="meta">
+          <span class="no">05</span>
+          <h2>FLOW <em>FIELD</em></h2>
+          <p>dalgalanan akış çizgileri</p>
+          <span class="open">aç →</span>
+        </div>
+      </a>
+
+      <a class="card" target="_blank" href="kaleidoskop/index.html">
+        <div class="scene" style="--a:#dc6eff; --b:#ffd77a;"></div>
+        <div class="meta">
+          <span class="no">06</span>
+          <h2>KALEIDO <em>SKOP</em></h2>
+          <p>altı aynalı simetri</p>
+          <span class="open">aç →</span>
+        </div>
+      </a>
+
+      <a class="card" target="_blank" href="spirograf/index.html">
+        <div class="scene" style="--a:#785aff; --b:#ff5aa0;"></div>
+        <div class="meta">
+          <span class="no">07</span>
+          <h2>SPIRO <em>GRAPH</em></h2>
+          <p>iz bırakan hipotrokoid</p>
+          <span class="open">aç →</span>
+        </div>
+      </a>
+
+    </div>
+
+    <h2 class="family">Anımsama — I</h2>
+    <p class="family-sub">sadece çizgiler — yaşamdan güzellikleri usulca hatırlatanlar</p>
+    <div class="grid">
+
+      <a class="card" target="_blank" href="suzulus/index.html">
+        <div class="scene" style="--a:#9fd9ff; --b:#5a7bff;"></div>
+        <div class="meta">
+          <span class="no">01</span>
+          <h2>SÜZÜLÜŞ</h2>
+          <p>uçanın bıraktığı iz — kanat, süzülüş</p>
+          <span class="open">aç →</span>
+        </div>
+      </a>
+
+      <a class="card" target="_blank" href="gelgit/index.html">
+        <div class="scene" style="--a:#2fb0c8; --b:#1a5f78;"></div>
+        <div class="meta">
+          <span class="no">02</span>
+          <h2>GELGİT</h2>
+          <p>denizin nefesi — çizgilerde yükselip alçalan su</p>
+          <span class="open">aç →</span>
+        </div>
+      </a>
+
+      <a class="card" target="_blank" href="kugu/index.html">
+        <div class="scene" style="--a:#d0e8ff; --b:#8a7bff;"></div>
+        <div class="meta">
+          <span class="no">03</span>
+          <h2>KUĞU</h2>
+          <p>suya yansıyan eğri — ağır ve huzurlu</p>
+          <span class="open">aç →</span>
+        </div>
+      </a>
+
+      <a class="card" target="_blank" href="yagmur/index.html">
+        <div class="scene" style="--a:#9ab8ff; --b:#4a6a9a;"></div>
+        <div class="meta">
+          <span class="no">04</span>
+          <h2>YAĞMUR</h2>
+          <p>düşen çizgiler — her damlada bir halka</p>
+          <span class="open">aç →</span>
+        </div>
+      </a>
+
+      <a class="card" target="_blank" href="ufuk/index.html">
+        <div class="scene" style="--a:#ffb06a; --b:#ff5a5a;"></div>
+        <div class="meta">
+          <span class="no">05</span>
+          <h2>UFUK</h2>
+          <p>geceden güne — göğün tonlarının yolculuğu</p>
+          <span class="open">aç →</span>
+        </div>
+      </a>
+
+      <a class="card" target="_blank" href="sarmal/index.html">
+        <div class="scene" style="--a:#ffd77a; --b:#8a6aff;"></div>
+        <div class="meta">
+          <span class="no">06</span>
+          <h2>SARMAL</h2>
+          <p>eğik galaksi — sonsuzluğun derinliği</p>
+          <span class="open">aç →</span>
+        </div>
+      </a>
+
+      <a class="card" target="_blank" href="nefes/index.html">
+        <div class="scene" style="--a:#c8d8ff; --b:#8a9aff;"></div>
+        <div class="meta">
+          <span class="no">07</span>
+          <h2>NEFES</h2>
+          <p>nefes alan ışık — yavaşlayınca duyulur</p>
+          <span class="open">aç →</span>
+        </div>
+      </a>
+
+    </div>
+
+    <h2 class="family">Anımsama — II</h2>
+    <p class="family-sub">dokununca canlanan — fare yaklaşınca hareketlenenler</p>
+    <div class="grid">
+
+      <a class="card" target="_blank" href="akis/index.html">
+        <div class="scene" style="--a:#5ad8c8; --b:#3a86ff;"></div>
+        <div class="meta">
+          <span class="no">08</span>
+          <h2>AKIŞ</h2>
+          <p>yön bulan çizgiler — dokun, sürüklensin</p>
+          <span class="open">aç →</span>
+        </div>
+      </a>
+
+      <a class="card" target="_blank" href="sonsuz/index.html">
+        <div class="scene" style="--a:#e8c8ff; --b:#8a5aff;"></div>
+        <div class="meta">
+          <span class="no">09</span>
+          <h2>SONSUZ</h2>
+          <p>durmadan dönen sekiz — dokun, hızlandır</p>
+          <span class="open">aç →</span>
+        </div>
+      </a>
+
+      <a class="card" target="_blank" href="yanki/index.html">
+        <div class="scene" style="--a:#8affd8; --b:#2f9a8a;"></div>
+        <div class="meta">
+          <span class="no">10</span>
+          <h2>YANKI</h2>
+          <p>dokununca büyüyen halkalar — sesin suyu</p>
+          <span class="open">aç →</span>
+        </div>
+      </a>
+
+      <a class="card" target="_blank" href="dokunus/index.html">
+        <div class="scene" style="--a:#a8e8ff; --b:#5a8aff;"></div>
+        <div class="meta">
+          <span class="no">11</span>
+          <h2>DOKUNUŞ</h2>
+          <p>ürkek ışık tozları — yaklaşınca çekilirler</p>
+          <span class="open">aç →</span>
+        </div>
+      </a>
+
+      <a class="card" target="_blank" href="cazibe/index.html">
+        <div class="scene" style="--a:#9ad8ff; --b:#6a9aff;"></div>
+        <div class="meta">
+          <span class="no">12</span>
+          <h2>CAZİBE</h2>
+          <p>fısıltıya dönen çizgiler — seni izlerler</p>
+          <span class="open">aç →</span>
+        </div>
+      </a>
+
+      <a class="card" target="_blank" href="ayna/index.html">
+        <div class="scene" style="--a:#b8d8ff; --b:#6a7aff;"></div>
+        <div class="meta">
+          <span class="no">13</span>
+          <h2>AYNA</h2>
+          <p>bükülen ince ızgara — dokun, dalgalansın</p>
+          <span class="open">aç →</span>
+        </div>
+      </a>
+
+    </div>
+
+    <h2 class="family">Kombinasyon Bahçesi</h2>
+    <p class="family-sub">on bir kavram — çizgiler · noktalar · elektriklenmeler · dönmeler · sarmallar · etkileşimler · döngüsellik · yayılım · dallanma · çarpışma · parçacıklar — ikişer ve üçerli kombinasyonları</p>
+    <div class="grid">
+
+      <a class="card" target="_blank" href="cark/index.html">
+        <div class="scene" style="--a:#9fd9ff; --b:#5a7bff;"></div>
+        <div class="meta">
+          <span class="no">01</span>
+          <h2>ÇARK</h2>
+          <p>dönmeler × çizgiler — iz bırakan ışın çarkı</p>
+          <span class="open">aç →</span>
+        </div>
+      </a>
+
+      <a class="card" target="_blank" href="elektrik/index.html">
+        <div class="scene" style="--a:#d0b8ff; --b:#7a5aff;"></div>
+        <div class="meta">
+          <span class="no">02</span>
+          <h2>ELEKTRİK</h2>
+          <p>elektriklenmeler × dallanma × çizgiler — dallanan yıldırım, yeniden çakıyor</p>
+          <span class="open">aç →</span>
+        </div>
+      </a>
+
+      <a class="card" target="_blank" href="toz/index.html">
+        <div class="scene" style="--a:#b8d8ff; --b:#6a9aff;"></div>
+        <div class="meta">
+          <span class="no">03</span>
+          <h2>TOZ</h2>
+          <p>noktalar × parçacıklar — havada asılı toz, ara ara kıvılcım</p>
+          <span class="open">aç →</span>
+        </div>
+      </a>
+
+      <a class="card" target="_blank" href="firtina/index.html">
+        <div class="scene" style="--a:#c8a8ff; --b:#8a6aff;"></div>
+        <div class="meta">
+          <span class="no">04</span>
+          <h2>FIRTINA</h2>
+          <p>sarmallar × dönmeler × parçacıklar — içe çeken parçacık girdabı</p>
+          <span class="open">aç →</span>
+        </div>
+      </a>
+
+      <a class="card" target="_blank" href="duman/index.html">
+        <div class="scene" style="--a:#c8d8ff; --b:#7a8aff;"></div>
+        <div class="meta">
+          <span class="no">05</span>
+          <h2>DUMAN</h2>
+          <p>etkileşimler × sarmallar — imleci dolanan sarmal izler</p>
+          <span class="open">aç →</span>
+        </div>
+      </a>
+
+      <a class="card" target="_blank" href="carpisma/index.html">
+        <div class="scene" style="--a:#ff9ab8; --b:#8a5aff;"></div>
+        <div class="meta">
+          <span class="no">06</span>
+          <h2>KARŞILAŞMA</h2>
+          <p>çarpışma × çizgiler × dönmeler — zıt yönlü ışınlar, kavşakta kıvılcım</p>
+          <span class="open">aç →</span>
+        </div>
+      </a>
+
+      <a class="card" target="_blank" href="tac/index.html">
+        <div class="scene" style="--a:#e8c8ff; --b:#a06aff;"></div>
+        <div class="meta">
+          <span class="no">07</span>
+          <h2>TAÇ</h2>
+          <p>elektriklenmeler × noktalar × çarpışma — deşarj olan nokta tacı</p>
+          <span class="open">aç →</span>
+        </div>
+      </a>
+
+      <a class="card" target="_blank" href="kiragi/index.html">
+        <div class="scene" style="--a:#b8e8ff; --b:#5a9aff;"></div>
+        <div class="meta">
+          <span class="no">08</span>
+          <h2>KIRAĞI</h2>
+          <p>yayılım × dallanma — büyüyen kırağı kristalleri</p>
+          <span class="open">aç →</span>
+        </div>
+      </a>
+
+      <a class="card" target="_blank" href="yorunge/index.html">
+        <div class="scene" style="--a:#d8ffc8; --b:#6aa05a;"></div>
+        <div class="meta">
+          <span class="no">09</span>
+          <h2>YÖRÜNGE</h2>
+          <p>noktalar × çizgiler × dönmeler × döngüsellik — yörüngeler, her turda bir halka</p>
+          <span class="open">aç →</span>
+        </div>
+      </a>
+
+      <a class="card" target="_blank" href="dalga/index.html">
+        <div class="scene" style="--a:#b8e8ff; --b:#5a9aff;"></div>
+        <div class="meta">
+          <span class="no">10</span>
+          <h2>DALGA</h2>
+          <p>çizgiler × yayılım × döngüsellik — suya düşen ışık halkaları</p>
+          <span class="open">aç →</span>
+        </div>
+      </a>
+
+      <a class="card" target="_blank" href="suru/index.html">
+        <div class="scene" style="--a:#ffd8b8; --b:#ff8a5a;"></div>
+        <div class="meta">
+          <span class="no">11</span>
+          <h2>SÜRÜ</h2>
+          <p>etkileşimler × parçacıklar × çarpışma — imleci kovalayan ışık sürüsü</p>
+          <span class="open">aç →</span>
+        </div>
+      </a>
+
+      <a class="card" target="_blank" href="orgu/index.html">
+        <div class="scene" style="--a:#e8c8ff; --b:#a06aff;"></div>
+        <div class="meta">
+          <span class="no">12</span>
+          <h2>ÖRGÜ</h2>
+          <p>dönmeler × dallanma × çizgiler — dönen dallardan dokunan mandala</p>
+          <span class="open">aç →</span>
+        </div>
+      </a>
+
+      <a class="card" target="_blank" href="kavsak/index.html">
+        <div class="scene" style="--a:#d8d8ff; --b:#8a6aff;"></div>
+        <div class="meta">
+          <span class="no">13</span>
+          <h2>KAVŞAK</h2>
+          <p>sarmallar × çarpışma — zıt yönlü sarmallar, kavşakta kıvılcım</p>
+          <span class="open">aç →</span>
+        </div>
+      </a>
+
+      <a class="card" target="_blank" href="zincir/index.html">
+        <div class="scene" style="--a:#b8d8ff; --b:#5a7bff;"></div>
+        <div class="meta">
+          <span class="no">14</span>
+          <h2>ZİNCİR</h2>
+          <p>noktalar × dönmeler × çizgiler — eğik yörüngede iç içe zincirler, kavşaklar parlar</p>
+          <span class="open">aç →</span>
+        </div>
+      </a>
+
+      <a class="card" target="_blank" href="kivilcim/index.html">
+        <div class="scene" style="--a:#d0b8ff; --b:#6a5aff;"></div>
+        <div class="meta">
+          <span class="no">15</span>
+          <h2>KIVILCIM</h2>
+          <p>elektriklenmeler × dallanma × çizgiler — dallarda yürüyen kıvılcım, uçta çakar</p>
+          <span class="open">aç →</span>
+        </div>
+      </a>
+
+      <a class="card" target="_blank" href="kristal/index.html">
+        <div class="scene" style="--a:#e8c8ff; --b:#a06aff;"></div>
+        <div class="meta">
+          <span class="no">16</span>
+          <h2>KRISTAL</h2>
+          <p>dönmeler × dallanma × elektriklenmeler — dönen kırık kristal, kenarında akan ışık</p>
+          <span class="open">aç →</span>
+        </div>
+      </a>
+
+    </div>
+  </main>
+
+  <p class="tema">hepsi tek dosya · CDN yok · internet gerektirmez</p>
+
+</body>
+</html>

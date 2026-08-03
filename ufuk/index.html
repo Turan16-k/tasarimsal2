@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Anımsama 08 — Ufuk</title>
+<meta name="theme-color" content="#0a1020">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;background:#0a1020;overflow:hidden}
+#scene{position:fixed;inset:0;display:block}
+.vignette{position:fixed;inset:0;pointer-events:none;
+  background:radial-gradient(ellipse at 50% 50%, transparent 55%, rgba(3,4,8,0.45) 100%)}
+</style>
+</head>
+<body>
+<canvas id="scene"></canvas>
+<div class="vignette" aria-hidden="true"></div>
+<script>
+(()=>{'use strict';
+const canvas=document.getElementById('scene');
+const ctx=canvas.getContext('2d');
+const TAU=Math.PI*2;
+const reduced=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const rand=Math.random;
+let W=0,H=0,DPR=1;
+let mx=-1e9,my=-1e9;
+window.addEventListener('pointermove',e=>{mx=e.clientX;my=e.clientY;});
+window.addEventListener('pointerleave',()=>{mx=-1e9;my=-1e9;});
+
+let ripples=[],lastPush=0;
+
+// gün döngüsü: gece→şafak→gündüz→akşam
+const keys=[
+  {top:[224,40,8],near:[212,45,14]},
+  {top:[258,42,15],near:[12,72,50]},
+  {top:[206,50,18],near:[204,40,40]},
+  {top:[304,36,14],near:[30,78,48]},
+];
+function sky(t){
+  const f=((t/150)%1)*keys.length;
+  const i=Math.floor(f)%keys.length,a=keys[i],b=keys[(i+1)%keys.length],u=f-Math.floor(f);
+  return {top:a.top.map((v,j)=>v+(b.top[j]-v)*u),near:a.near.map((v,j)=>v+(b.near[j]-v)*u)};
+}
+
+function build(){ripples.length=0;lastPush=0;}
+
+function frame(now){
+  const dt=now-last;last=now;
+  const k=Math.min(dt,50)/16.67;
+  const t=now/1000;
+  const hz=H*0.5;
+  const s=sky(t);
+  const top=s.top,near=s.near;
+
+  // gökyüzü
+  const sg=ctx.createLinearGradient(0,0,0,hz);
+  sg.addColorStop(0,`hsla(${top[0]},${top[1]}%,${top[2]}%,1)`);
+  sg.addColorStop(1,`hsla(${near[0]},${near[1]}%,${near[2]}%,1)`);
+  ctx.fillStyle=sg;ctx.fillRect(0,0,W,hz);
+  // su — göğün karanlık yansıması
+  const wg=ctx.createLinearGradient(0,hz,0,H);
+  wg.addColorStop(0,`hsla(${near[0]},${near[1]}%,${Math.max(6,near[2]*0.5)}%,1)`);
+  wg.addColorStop(1,`hsla(${top[0]},${top[1]}%,${Math.max(3,top[2]*0.4)}%,1)`);
+  ctx.fillStyle=wg;ctx.fillRect(0,hz,W,H-hz);
+
+  // ufuk parıltısı
+  ctx.save();ctx.globalCompositeOperation='lighter';
+  const gl=ctx.createRadialGradient(W*0.5,hz,0,W*0.5,hz,H*0.22);
+  gl.addColorStop(0,`hsla(${near[0]},${near[1]}%,${near[2]}%,0.5)`);
+  gl.addColorStop(1,`hsla(${near[0]},${near[1]}%,${near[2]}%,0)`);
+  ctx.fillStyle=gl;ctx.fillRect(0,hz-H*0.22,W,H*0.44);
+  ctx.restore();
+
+  // ufuk çizgisi
+  ctx.save();ctx.globalCompositeOperation='lighter';
+  for(let pass=0;pass<3;pass++){
+    ctx.strokeStyle=`hsla(${near[0]},${near[1]}%,${Math.min(92,near[2]+45)}%,${pass===2?0.8:0.14})`;
+    ctx.lineWidth=pass===0?10:pass===1?3:1;
+    ctx.beginPath();ctx.moveTo(0,hz);ctx.lineTo(W,hz);ctx.stroke();
+  }
+  ctx.restore();
+
+  // uzak kemerler — belirsiz hatıralar
+  ctx.strokeStyle='rgba(230,240,255,0.10)';
+  ctx.lineWidth=1;
+  for(let i=0;i<3;i++){
+    const x=((t*(6+i*4)+i*W/3)%(W+260))-130;
+    const y=hz-(26+i*24);
+    const r=30+i*16;
+    const al=0.04+0.05*(0.5+0.5*Math.sin(t*0.3+i*2));
+    ctx.globalAlpha=al;
+    ctx.beginPath();ctx.arc(x,y,r,Math.PI,0);ctx.stroke();
+  }
+  ctx.globalAlpha=1;
+
+  // sudaki yansıma çizgileri
+  ctx.lineWidth=1;
+  for(let i=0;i<6;i++){
+    const y=hz+(i+1)*H*0.05;
+    const al=0.04+0.05*Math.exp(-i/2);
+    ctx.strokeStyle=`hsla(${near[0]},${near[1]}%,${near[2]+20}%,${al})`;
+    ctx.beginPath();
+    for(let u=0;u<=1;u+=0.02){
+      const x=u*W;
+      const yy=y+Math.sin(u*11+t*0.5+i*2)*1.6;
+      if(u===0)ctx.moveTo(x,yy);else ctx.lineTo(x,yy);
+    }
+    ctx.stroke();
+  }
+
+  // su üzerinde ışık sütunu
+  ctx.save();ctx.globalCompositeOperation='lighter';
+  const col=ctx.createRadialGradient(W*0.5,hz,0,W*0.5,hz,W*0.05);
+  col.addColorStop(0,`hsla(${near[0]},${near[1]}%,${near[2]}%,0.30)`);
+  col.addColorStop(1,`hsla(${near[0]},${near[1]}%,${near[2]}%,0)`);
+  ctx.fillStyle=col;ctx.fillRect(W*0.5-W*0.08,hz,W*0.16,H-hz);
+  ctx.restore();
+
+  // su halkaları (dokununca)
+  ctx.save();ctx.strokeStyle='rgba(230,240,255,0.5)';
+  for(let i=ripples.length-1;i>=0;i--){
+    const rp=ripples[i];rp.age+=dt;
+    const p=rp.age/rp.life;
+    if(p>=1){ripples.splice(i,1);continue;}
+    const rr=4+p*(W*0.16);
+    ctx.globalAlpha=(1-p)*0.24;
+    ctx.beginPath();ctx.ellipse(rp.x,rp.y,rr,rr*0.14,0,0,TAU);ctx.stroke();
+  }
+  ctx.globalAlpha=1;ctx.restore();
+
+  if(mx>-1e8&&my>hz&&now-lastPush>150){
+    lastPush=now;
+    if(ripples.length<14)ripples.push({x:mx,y:my,age:0,life:5200,r:0});
+  }
+
+  requestAnimationFrame(frame);
+}
+let last=performance.now();
+
+function resize(){
+  DPR=Math.min(window.devicePixelRatio||1,1.5);
+  W=window.innerWidth;H=window.innerHeight;
+  canvas.width=Math.round(W*DPR);canvas.height=Math.round(H*DPR);
+  canvas.style.width=W+'px';canvas.style.height=H+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  build();
+  if(reduced)renderStatic();
+}
+function renderStatic(){
+  const t=20,hz=H*0.5,s=sky(t),top=s.top,near=s.near;
+  const sg=ctx.createLinearGradient(0,0,0,hz);
+  sg.addColorStop(0,`hsla(${top[0]},${top[1]}%,${top[2]}%,1)`);
+  sg.addColorStop(1,`hsla(${near[0]},${near[1]}%,${near[2]}%,1)`);
+  ctx.fillStyle=sg;ctx.fillRect(0,0,W,hz);
+  const wg=ctx.createLinearGradient(0,hz,0,H);
+  wg.addColorStop(0,`hsla(${near[0]},${near[1]}%,${Math.max(6,near[2]*0.5)}%,1)`);
+  wg.addColorStop(1,`hsla(${top[0]},${top[1]}%,${Math.max(3,top[2]*0.4)}%,1)`);
+  ctx.fillStyle=wg;ctx.fillRect(0,hz,W,H-hz);
+  ctx.strokeStyle=`hsla(${near[0]},${near[1]}%,${Math.min(92,near[2]+45)}%,0.8)`;
+  ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(0,hz);ctx.lineTo(W,hz);ctx.stroke();
+}
+window.addEventListener('resize',resize);
+resize();
+if(!reduced)requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

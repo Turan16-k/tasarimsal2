@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Anımsama 07 — Yağmur</title>
+<meta name="theme-color" content="#0a1018">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;background:#0a1018;overflow:hidden}
+#scene{position:fixed;inset:0;display:block}
+.vignette{position:fixed;inset:0;pointer-events:none;
+  background:radial-gradient(ellipse at 50% 42%, transparent 55%, rgba(2,4,8,0.5) 100%)}
+</style>
+</head>
+<body>
+<canvas id="scene"></canvas>
+<div class="vignette" aria-hidden="true"></div>
+<script>
+(()=>{'use strict';
+const canvas=document.getElementById('scene');
+const ctx=canvas.getContext('2d');
+const TAU=Math.PI*2;
+const reduced=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const rand=Math.random;
+let W=0,H=0,DPR=1;
+let mx=-1e9,my=-1e9;
+window.addEventListener('pointermove',e=>{mx=e.clientX;my=e.clientY;});
+window.addEventListener('pointerleave',()=>{mx=-1e9;my=-1e9;});
+
+let drops=[],ripples=[],bg=null;
+
+function makeDrop(top){
+  return {
+    x:rand()*W,
+    y:top?rand()*H:-20,
+    vy:150+rand()*170,
+    vx:-(28+rand()*34),
+    len:16+rand()*26,
+    a:0.10+rand()*0.16,
+    landed:false,
+  };
+}
+
+function build(){
+  bg=ctx.createLinearGradient(0,0,0,H);
+  bg.addColorStop(0,'#0d1622');
+  bg.addColorStop(0.7,'#0a111b');
+  bg.addColorStop(1,'#060a12');
+  drops=[];
+  const n=Math.max(90,Math.min(150,Math.round(W/8)));
+  for(let i=0;i<n;i++)drops.push(makeDrop(true));
+  ripples.length=0;
+}
+
+function frame(now){
+  const dt=now-last;last=now;
+  const k=Math.min(dt,50)/16.67;
+  const t=now/1000;
+  ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
+
+  ctx.lineCap='round';
+  for(const d of drops){
+    d.y+=d.vy*0.016*k;
+    d.x+=d.vx*0.016*k;
+    if(mx>-1e8){
+      const dx=d.x-mx,dy=d.y-my;
+      const d2=dx*dx+dy*dy;
+      if(d2<150*150){
+        const dd=Math.sqrt(d2)||1;
+        const f=(1-dd/150)*1.8;
+        d.x+=dx/dd*f*2.4*k;
+        d.vy+=d.vy*0.02*f*k;
+      }
+    }
+    if(d.y>H){
+      if(!d.landed){
+        d.landed=true;
+        if(rand()<0.5&&ripples.length<26)ripples.push({x:d.x,y:H,age:0,life:3400+rand()*1600});
+      }
+      if(d.y>H+d.len+6){
+        const nd=makeDrop(false);
+        d.x=nd.x;d.y=nd.y;d.vy=nd.vy;d.vx=nd.vx;d.len=nd.len;d.a=nd.a;d.landed=false;
+      }
+      continue;
+    }
+    ctx.strokeStyle=`rgba(150,185,225,${d.a})`;
+    ctx.lineWidth=1;
+    ctx.beginPath();
+    ctx.moveTo(d.x,d.y);
+    ctx.lineTo(d.x+d.vx*0.02,d.y+d.len);
+    ctx.stroke();
+  }
+
+  // düşüş halkaları
+  ctx.save();ctx.strokeStyle='rgba(170,200,240,0.5)';
+  for(let i=ripples.length-1;i>=0;i--){
+    const rp=ripples[i];rp.age+=dt;
+    const p=rp.age/rp.life;
+    if(p>=1){ripples.splice(i,1);continue;}
+    const rr=4+p*(W*0.10);
+    ctx.globalAlpha=(1-p)*0.20;
+    ctx.beginPath();ctx.ellipse(rp.x,rp.y,rr,rr*0.14,0,0,TAU);ctx.stroke();
+  }
+  ctx.globalAlpha=1;ctx.restore();
+
+  requestAnimationFrame(frame);
+}
+let last=performance.now();
+
+function resize(){
+  DPR=Math.min(window.devicePixelRatio||1,1.5);
+  W=window.innerWidth;H=window.innerHeight;
+  canvas.width=Math.round(W*DPR);canvas.height=Math.round(H*DPR);
+  canvas.style.width=W+'px';canvas.style.height=H+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  build();
+  if(reduced)renderStatic();
+}
+function renderStatic(){
+  ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
+  ctx.lineCap='round';
+  for(const d of drops){
+    ctx.strokeStyle=`rgba(150,185,225,${d.a})`;
+    ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(d.x,d.y);ctx.lineTo(d.x+d.vx*0.02,d.y+d.len);ctx.stroke();
+  }
+}
+window.addEventListener('resize',resize);
+resize();
+if(!reduced)requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
